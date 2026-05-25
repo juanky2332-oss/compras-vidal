@@ -1,10 +1,26 @@
-﻿import type { HistoricoRow, FuzzyMatch, ProveedorTop, FuzzyResult, Material } from './types'
+import type { HistoricoRow, FuzzyMatch, ProveedorTop, FuzzyResult, Material } from './types'
+
+const ACCENT_MAP: Record<string, string> = {
+  'á':'a','à':'a','ä':'a','â':'a','ã':'a',
+  'é':'e','è':'e','ë':'e','ê':'e',
+  'í':'i','ì':'i','ï':'i','î':'i',
+  'ó':'o','ò':'o','ö':'o','ô':'o','õ':'o',
+  'ú':'u','ù':'u','ü':'u','û':'u',
+  'ñ':'n','ç':'c',
+  'Á':'a','À':'a','Ä':'a','Â':'a','Ã':'a',
+  'É':'e','È':'e','Ë':'e','Ê':'e',
+  'Í':'i','Ì':'i','Ï':'i','Î':'i',
+  'Ó':'o','Ò':'o','Ö':'o','Ô':'o','Õ':'o',
+  'Ú':'u','Ù':'u','Ü':'u','Û':'u',
+  'Ñ':'n','Ç':'c',
+}
+
+function removeAccents(s: string): string {
+  return s.split('').map((c) => ACCENT_MAP[c] ?? c).join('')
+}
 
 function norm(s: string | number | null | undefined): string {
-  return (s == null ? '' : String(s))
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+  return removeAccents((s == null ? '' : String(s)).toLowerCase())
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -16,12 +32,7 @@ function getField(row: HistoricoRow, ...names: string[]): string {
     if (val !== undefined && val !== null && String(val).trim() !== '') return String(val)
   }
   const keys = Object.keys(row)
-  const nn = (s: string) =>
-    s
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/\s+/g, '')
+  const nn = (s: string) => removeAccents(s.toLowerCase()).replace(/\s+/g, '')
   for (const n of names) {
     const k = keys.find((k) => nn(k) === nn(n))
     if (k && row[k] !== undefined && String(row[k] ?? '').trim() !== '') return String(row[k])
@@ -106,15 +117,18 @@ export function buscarMateriales(materiales: Material[], historico: HistoricoRow
     const allBlob = norm(Object.values(r).join(' '))
     const sap = getField(
       r,
+      'Código sap',
       'Codigo sap',
       'Codigo SAP',
       'codigo sap',
       'CODIGO SAP',
       'Codigo SAP/ Material',
-      'Codigo SAP/Material'
+      'Codigo SAP/Material',
+      'código sap',
+      'CÓDIGO SAP'
     )
     const prov = extractNombreProveedor(
-      getField(r, 'Proveedor', 'proveedor', 'PROVEEDOR', 'Proveedor/Centro suministrador')
+      getField(r, 'Proveedor/Centro suministrador', 'Proveedor', 'proveedor', 'PROVEEDOR')
     )
     return { mat, matBlob, tokens, allBlob, sap, prov }
   })
