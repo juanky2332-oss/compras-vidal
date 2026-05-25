@@ -1,4 +1,4 @@
-import type { HistoricoRow, FuzzyMatch, ProveedorTop, FuzzyResult, Material } from './types'
+﻿import type { HistoricoRow, FuzzyMatch, ProveedorTop, FuzzyResult, Material } from './types'
 
 function norm(s: string | number | null | undefined): string {
   return (s == null ? '' : String(s))
