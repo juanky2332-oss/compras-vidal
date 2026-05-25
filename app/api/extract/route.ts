@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+export const dynamic = 'force-dynamic'
+
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
 
 const SYSTEM_PROMPT = `Eres un extractor de materiales industriales para el departamento de compras de Vidal Golosinas.
 
@@ -49,7 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ materiales: [] })
     }
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },

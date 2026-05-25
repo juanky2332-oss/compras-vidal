@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import type { FuzzyResult, Recomendacion } from '@/lib/types'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+export const dynamic = 'force-dynamic'
+
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
 
 const SYSTEM_PROMPT = `Eres el asistente de compras de Vidal Golosinas. Analizas histórico real y das recomendaciones útiles, sin inventar nada, para que el comprador pueda crear el pedido en SAP con confianza.
 
@@ -96,7 +102,7 @@ ${JSON.stringify(item.matches.sapsRealesFamilia, null, 2)}
 
 Aplica la logica de 3 situaciones (A/B/C) y devuelve el JSON estricto.`
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },

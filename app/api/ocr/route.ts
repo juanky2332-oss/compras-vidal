@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+export const dynamic = 'force-dynamic'
+
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
 
 const OCR_PROMPT = `Eres un OCR de fotos/capturas relacionadas con compras industriales en Vidal Golosinas. Tu objetivo es extraer SOLO los datos útiles para identificar materiales a comprar.
 
@@ -30,7 +36,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No image provided' }, { status: 400 })
     }
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         {
