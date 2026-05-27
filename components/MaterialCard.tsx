@@ -12,11 +12,13 @@ import {
   CheckSquare,
   Square,
   Lightbulb,
+  Tag,
+  Layers,
 } from 'lucide-react'
-import type { Recomendacion } from '@/lib/types'
+import type { RecomendacionNueva } from '@/lib/types'
 
 interface MaterialCardProps {
-  rec: Recomendacion
+  rec: RecomendacionNueva
   index: number
   onToggle: (index: number) => void
 }
@@ -51,28 +53,23 @@ const CONFIDENCE_CONFIG = {
   },
 }
 
-const SAP_STATUS_LABELS = {
-  confirmado: { label: 'SAP confirmado', color: 'text-emerald-400' },
-  sin_codificar: { label: 'Sin codificar', color: 'text-amber-400' },
-  aproximado: { label: 'SAP aproximado', color: 'text-orange-400' },
-  ninguno: { label: 'Sin SAP', color: 'text-red-400/70' },
-}
-
-function cleanSap(sap: string | undefined): string {
-  if (!sap) return ''
-  if (/^0*599000000$/.test(sap.replace(/\s/g, ''))) return ''
-  return sap
+const PASO_LABELS: Record<number, { label: string; color: string }> = {
+  1: { label: 'Marca detectada', color: 'text-violet-400/70' },
+  2: { label: 'Tipo de material', color: 'text-indigo-400/70' },
+  3: { label: 'SAP match', color: 'text-emerald-400/70' },
+  4: { label: 'Fallback categoría', color: 'text-amber-400/70' },
+  5: { label: 'Sin match — pedir aclaración', color: 'text-red-400/70' },
 }
 
 export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps) {
   const [expandido, setExpandido] = useState(false)
   const cfg = CONFIDENCE_CONFIG[rec.nivel_confianza]
   const ConfIcon = cfg.icon
-  const principal = rec.recomendacion_principal
-  const sapLimpio = cleanSap(principal.codigo_sap)
-  const sapStatusCfg = SAP_STATUS_LABELS[principal.sap_status] || SAP_STATUS_LABELS.ninguno
+  const proveedor = rec.proveedor_recomendado
   const tieneAlternativas = rec.alternativas?.length > 0
+  const tieneSAPs = rec.codigos_sap_sugeridos?.length > 0
   const tieneObservaciones = !!rec.observaciones?.trim()
+  const paso = PASO_LABELS[rec._pasoDeterminante] || PASO_LABELS[5]
 
   return (
     <div
@@ -103,7 +100,7 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            {/* Material name */}
+            {/* Material name + confidence */}
             <div className="flex items-start justify-between gap-2 mb-2">
               <h3 className="text-sm font-semibold text-white/90 leading-snug">
                 {rec.material_detectado}
@@ -116,48 +113,50 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
               </div>
             </div>
 
-            {/* Provider + SAP row */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              {principal.proveedor && principal.proveedor !== 'Sin datos' && (
+            {/* Tipo material + marca */}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2">
+              {rec.tipo_material && rec.tipo_material !== 'No clasificado' && (
                 <div className="flex items-center gap-1.5">
-                  <Building2 className="w-3 h-3 text-white/25 flex-shrink-0" />
-                  <span className="text-xs text-white/60 font-medium">{principal.proveedor}</span>
+                  <Layers className="w-3 h-3 text-white/20 flex-shrink-0" />
+                  <span className="text-xs text-white/40">{rec.tipo_material}</span>
                 </div>
               )}
-
-              {sapLimpio ? (
+              {rec.marca_detectada && rec.marca_detectada !== 'no especificada' && (
                 <div className="flex items-center gap-1.5">
-                  <Hash className="w-3 h-3 text-white/25 flex-shrink-0" />
-                  <code className="sap-code text-xs text-indigo-300/90 bg-indigo-500/08 border border-indigo-500/15 px-1.5 py-0.5 rounded-md">
-                    {sapLimpio}
-                  </code>
-                  <span className={`text-xs ${sapStatusCfg.color}`}>{sapStatusCfg.label}</span>
+                  <Tag className="w-3 h-3 text-violet-400/40 flex-shrink-0" />
+                  <span className="text-xs text-violet-300/60">{rec.marca_detectada}</span>
                 </div>
-              ) : (
+              )}
+            </div>
+
+            {/* Provider + SAP */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {proveedor?.nombre && proveedor.nombre !== 'Sin datos' && (
                 <div className="flex items-center gap-1.5">
-                  <Hash className="w-3 h-3 text-white/25 flex-shrink-0" />
-                  <span className={`text-xs ${sapStatusCfg.color}`}>{sapStatusCfg.label}</span>
+                  <Building2 className="w-3 h-3 text-white/25 flex-shrink-0" />
+                  <span className="text-xs text-white/70 font-medium">{proveedor.nombre}</span>
+                  {proveedor.codigo && (
+                    <code className="text-xs text-white/35 font-mono">{proveedor.codigo}</code>
+                  )}
                 </div>
               )}
             </div>
 
             {/* Motivo */}
-            {principal.motivo && (
-              <p className="mt-2 text-xs text-white/35 leading-relaxed">{principal.motivo}</p>
+            {rec.motivo && (
+              <p className="mt-2 text-xs text-white/35 leading-relaxed">{rec.motivo}</p>
             )}
 
-            {/* Material histórico */}
-            {principal.material_historico && (
-              <p className="mt-1 text-xs text-white/25 italic truncate" title={principal.material_historico}>
-                Histórico: {principal.material_historico}
-              </p>
-            )}
+            {/* Paso determinante */}
+            <p className={`mt-1.5 text-xs ${paso.color}`}>
+              Paso {rec._pasoDeterminante}: {paso.label}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Expandible: alternativas + observaciones */}
-      {(tieneAlternativas || tieneObservaciones) && (
+      {/* Expandible */}
+      {(tieneAlternativas || tieneSAPs || tieneObservaciones) && (
         <>
           <button
             onClick={() => setExpandido(!expandido)}
@@ -165,7 +164,9 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
           >
             <span>
               {tieneAlternativas ? `${rec.alternativas.length} alternativa${rec.alternativas.length > 1 ? 's' : ''}` : ''}
-              {tieneAlternativas && tieneObservaciones ? ' · ' : ''}
+              {tieneAlternativas && tieneSAPs ? ' · ' : ''}
+              {tieneSAPs ? `${rec.codigos_sap_sugeridos.length} SAP${rec.codigos_sap_sugeridos.length > 1 ? 's' : ''}` : ''}
+              {(tieneAlternativas || tieneSAPs) && tieneObservaciones ? ' · ' : ''}
               {tieneObservaciones ? 'Observaciones' : ''}
             </span>
             {expandido ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -176,35 +177,38 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
               {/* Alternativas */}
               {tieneAlternativas && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-white/30">
-                    {principal.sap_status === 'sin_codificar' || principal.sap_status === 'aproximado'
-                      ? 'SAPs a verificar:'
-                      : 'Alternativas:'}
-                  </p>
-                  {rec.alternativas.slice(0, 3).map((alt, i) => {
-                    const altSap = cleanSap(alt.codigo_sap)
-                    if (!alt.proveedor && !altSap) return null
-                    return (
-                      <div key={i} className="pl-3 border-l border-white/08 space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          {alt.proveedor && (
-                            <span className="text-xs text-white/50 font-medium">{alt.proveedor}</span>
-                          )}
-                          {altSap && (
-                            <code className="sap-code text-xs text-white/40 bg-white/04 border border-white/08 px-1.5 py-0.5 rounded-md">
-                              {altSap}
-                            </code>
-                          )}
-                        </div>
-                        {alt.material_historico && (
-                          <p className="text-xs text-white/25 italic truncate">{alt.material_historico}</p>
-                        )}
-                        {alt.nota && (
-                          <p className="text-xs text-white/35">{alt.nota}</p>
+                  <p className="text-xs font-medium text-white/30">Alternativas:</p>
+                  {rec.alternativas.slice(0, 3).map((alt, i) => (
+                    <div key={i} className="pl-3 border-l border-white/08 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-xs text-white/50 font-medium">{alt.nombre}</span>
+                        {alt.codigo && (
+                          <code className="text-xs text-white/35 bg-white/04 border border-white/08 px-1.5 py-0.5 rounded-md font-mono">
+                            {alt.codigo}
+                          </code>
                         )}
                       </div>
-                    )
-                  })}
+                      {alt.nota && <p className="text-xs text-white/30">{alt.nota}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* SAPs sugeridos */}
+              {tieneSAPs && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-white/30">Códigos SAP sugeridos:</p>
+                  {rec.codigos_sap_sugeridos.slice(0, 4).map((sap, i) => (
+                    <div key={i} className="pl-3 border-l border-indigo-500/20 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <code className="text-xs text-indigo-300/80 bg-indigo-500/08 border border-indigo-500/15 px-1.5 py-0.5 rounded-md font-mono">
+                          {sap.codigo}
+                        </code>
+                        <span className="text-xs text-white/35">{sap.proveedor}</span>
+                      </div>
+                      <p className="text-xs text-white/25 italic">{sap.descripcion}</p>
+                    </div>
+                  ))}
                 </div>
               )}
 

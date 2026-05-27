@@ -5,10 +5,7 @@ import Header from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
-import HistoricoSetup from '@/components/HistoricoSetup'
-import { getHistorico, saveHistorico, isHistoricoStale } from '@/lib/indexedDB'
-import { buscarMateriales } from '@/lib/fuzzySearch'
-import type { HistoricoRow, Recomendacion, Material } from '@/lib/types'
+import type { RecomendacionNueva, Material } from '@/lib/types'
 import {
   PackageSearch,
   AlertCircle,
@@ -17,11 +14,9 @@ import {
   ScanText,
   BrainCircuit,
   CheckCheck,
-  RefreshCw,
 } from 'lucide-react'
 
 type Paso = 'ocr' | 'extraccion' | 'busqueda' | 'razonamiento' | null
-type DriveStatus = 'idle' | 'syncing' | 'ok' | 'error-private' | 'error'
 
 interface LogEntry {
   paso: Paso
@@ -29,87 +24,26 @@ interface LogEntry {
   ok: boolean
 }
 
+interface DbStats {
+  marcas: number
+  proveedores: number
+  saps: number
+}
+
 export default function HomePage() {
-  const [historico, setHistorico] = useState<HistoricoRow[]>([])
-  const [historicoCargado, setHistoricoCargado] = useState(false)
-  const [driveStatus, setDriveStatus] = useState<DriveStatus>('idle')
-  const [driveError, setDriveError] = useState('')
-  const [setupOpen, setSetupOpen] = useState(false)
+  const [dbStats, setDbStats] = useState<DbStats>({ marcas: 0, proveedores: 0, saps: 0 })
   const [cargando, setCargando] = useState(false)
   const [pasoActual, setPasoActual] = useState<Paso>(null)
   const [log, setLog] = useState<LogEntry[]>([])
-  const [recomendaciones, setRecomendaciones] = useState<Recomendacion[]>([])
+  const [recomendaciones, setRecomendaciones] = useState<RecomendacionNueva[]>([])
   const [error, setError] = useState<string | null>(null)
   const [consultas, setConsultas] = useState<string[]>([])
 
-  // Sincroniza el histórico: primero IndexedDB, si está vacío o antiguo tira de Drive
-  const syncHistorico = useCallback(async (force = false) => {
-    try {
-      // 1. Intentar IndexedDB primero
-      const cached = await getHistorico()
-      const stale = await isHistoricoStale(6) // más de 6h → refrescar
-
-      if (cached.length > 0 && !stale && !force) {
-        setHistorico(cached)
-        setHistoricoCargado(true)
-        return
-      }
-
-      // 2. Bajar de Google Drive (misma fuente que el workflow n8n)
-      setDriveStatus('syncing')
-      const res = await fetch('/api/historico')
-      const data = await res.json()
-
-      if (!res.ok) {
-        if (data.needsPublicSheet) {
-          setDriveStatus('error-private')
-          setDriveError(data.error || 'Sheet privado')
-        } else {
-          setDriveStatus('error')
-          setDriveError(data.error || 'Error al conectar con Drive')
-        }
-        // Si hay cache vieja, usarla igualmente
-        if (cached.length > 0) {
-          setHistorico(cached)
-          setHistoricoCargado(true)
-        }
-        return
-      }
-
-      const rows: HistoricoRow[] = data.rows || []
-      if (rows.length === 0) {
-        setDriveStatus('error')
-        setDriveError('El Sheet está vacío o no tiene datos legibles')
-        return
-      }
-
-      // 3. Guardar en IndexedDB como cache local
-      await saveHistorico(rows, 'drive')
-      setHistorico(rows)
-      setHistoricoCargado(true)
-      setDriveStatus('ok')
-    } catch (e) {
-      setDriveStatus('error')
-      setDriveError(e instanceof Error ? e.message : 'Error desconocido')
-      // usar cache vieja si existe
-      const cached = await getHistorico()
-      if (cached.length > 0) {
-        setHistorico(cached)
-        setHistoricoCargado(true)
-      }
-    }
-  }, [])
-
-  // Cargar al montar
   useEffect(() => {
-    syncHistorico()
-  }, [syncHistorico])
-
-  const handleHistoricoLoaded = useCallback((rows: HistoricoRow[], filas: number) => {
-    setHistorico(rows)
-    setHistoricoCargado(filas > 0)
-    setDriveStatus('ok')
-    setSetupOpen(false)
+    fetch('/api/dbstats')
+      .then((r) => r.json())
+      .then((data) => setDbStats(data))
+      .catch(() => {})
   }, [])
 
   const addLog = (paso: Paso, texto: string, ok: boolean) => {
@@ -131,7 +65,7 @@ export default function HomePage() {
         let ocrTexto = ''
         if (imagen) {
           setPasoActual('ocr')
-          const base64 = await fileToBase64(imagen)
+          const base64 = await compressImage(imagen)
           const ocrRes = await fetch('/api/ocr', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -171,33 +105,20 @@ export default function HomePage() {
           true
         )
 
-        // === PASO 3: FUZZY SEARCH (cliente, contra IndexedDB) ===
+        // === PASO 3: CONSULTA BASE DE DATOS (5 pasos) ===
         setPasoActual('busqueda')
-        // Usar estado en memoria primero, si no hay tirar de IndexedDB (por si acaso)
-        const historicoActual = historico.length > 0 ? historico : await getHistorico()
-        const fuzzyResults = buscarMateriales(materiales, historicoActual)
-        const matchesCount = fuzzyResults.reduce((acc, r) => acc + r.matches.historicoCompras.length, 0)
+        addLog('busqueda', `Consultando base de datos: ${dbStats.saps.toLocaleString('es-ES')} SAPs · ${dbStats.marcas} marcas · ${dbStats.proveedores} proveedores`, true)
 
-        if (historicoActual.length === 0) {
-          addLog('busqueda', 'Histórico vacío — respuesta sin contexto de compras previas', false)
-        } else {
-          addLog(
-            'busqueda',
-            `Histórico: ${historicoActual.length.toLocaleString('es-ES')} filas · ${matchesCount} coincidencias`,
-            true
-          )
-        }
-
-        // === PASO 4: RAZONAMIENTO IA ===
+        // === PASO 4: RECOMENDACIÓN IA ===
         setPasoActual('razonamiento')
-        const reasonRes = await fetch('/api/reason', {
+        const recRes = await fetch('/api/recommend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fuzzyResults }),
+          body: JSON.stringify({ materiales }),
         })
-        if (!reasonRes.ok) throw new Error('Error en razonamiento IA')
-        const reasonData = await reasonRes.json()
-        const recs: Recomendacion[] = (reasonData.recomendaciones || []).map((r: Recomendacion) => ({
+        if (!recRes.ok) throw new Error('Error en recomendación')
+        const recData = await recRes.json()
+        const recs: RecomendacionNueva[] = (recData.recomendaciones || []).map((r: RecomendacionNueva) => ({
           ...r,
           seleccionado: true,
         }))
@@ -205,7 +126,7 @@ export default function HomePage() {
         const altos = recs.filter((r) => r.nivel_confianza === 'ALTO').length
         const medios = recs.filter((r) => r.nivel_confianza === 'MEDIO').length
         const bajos = recs.filter((r) => r.nivel_confianza === 'BAJO').length
-        addLog('razonamiento', `ALTO:${altos}  MEDIO:${medios}  BAJO:${bajos}`, true)
+        addLog('razonamiento', `ALTO: ${altos}  MEDIO: ${medios}  BAJO: ${bajos}`, true)
 
         setRecomendaciones(recs)
         setConsultas((prev) => [consulta.slice(0, 80), ...prev].slice(0, 5))
@@ -218,7 +139,7 @@ export default function HomePage() {
         setPasoActual(null)
       }
     },
-    [cargando, historico, pasoActual]
+    [cargando, dbStats, pasoActual]
   )
 
   const handleToggle = (index: number) => {
@@ -236,9 +157,31 @@ export default function HomePage() {
   const PASOS_INFO = {
     ocr: { icon: ScanText, label: 'OCR de imagen' },
     extraccion: { icon: Cpu, label: 'Extrayendo materiales' },
-    busqueda: { icon: PackageSearch, label: 'Búsqueda en histórico' },
-    razonamiento: { icon: BrainCircuit, label: 'Razonando con IA' },
+    busqueda: { icon: PackageSearch, label: 'Consultando base de datos' },
+    razonamiento: { icon: BrainCircuit, label: 'Analizando con IA' },
   }
+
+  // Map RecomendacionNueva to legacy Recomendacion shape for ExportSAP
+  const recsParaExport = recomendaciones.map((r) => ({
+    cantidad: r.cantidad,
+    material_detectado: r.material_detectado,
+    recomendacion_principal: {
+      proveedor: r.proveedor_recomendado?.nombre || '',
+      codigo_sap: r.codigos_sap_sugeridos?.[0]?.codigo || '',
+      sap_status: r.codigos_sap_sugeridos?.length > 0 ? 'confirmado' as const : 'ninguno' as const,
+      material_historico: r.codigos_sap_sugeridos?.[0]?.descripcion || '',
+      motivo: r.motivo || '',
+    },
+    alternativas: (r.alternativas || []).map((a) => ({
+      proveedor: a.nombre,
+      codigo_sap: a.codigo,
+      material_historico: '',
+      nota: a.nota || '',
+    })),
+    nivel_confianza: r.nivel_confianza,
+    observaciones: r.observaciones || '',
+    seleccionado: r.seleccionado,
+  }))
 
   return (
     <div className="min-h-screen bg-[#08080f]">
@@ -249,43 +192,9 @@ export default function HomePage() {
         }}
       />
 
-      <Header
-        historicoCargado={historicoCargado}
-        filas={historico.length}
-        driveStatus={driveStatus}
-        onOpenSetup={() => setSetupOpen(true)}
-        onSync={() => syncHistorico(true)}
-      />
-
-      {setupOpen && (
-        <HistoricoSetup
-          onClose={() => setSetupOpen(false)}
-          onLoaded={handleHistoricoLoaded}
-          filasCargadas={historico.length}
-        />
-      )}
+      <Header marcas={dbStats.marcas} proveedores={dbStats.proveedores} saps={dbStats.saps} />
 
       <main className="relative max-w-3xl mx-auto px-4 pt-20 pb-16">
-        {/* Banner Drive error */}
-        {(driveStatus === 'error-private' || driveStatus === 'error') && !historicoCargado && (
-          <div className="mt-6 mb-4 p-4 glass rounded-xl border border-amber-500/20 bg-amber-500/04 animate-fade-in">
-            <p className="text-sm font-medium text-amber-400">No se pudo conectar con el histórico de Drive</p>
-            <p className="text-xs text-amber-400/60 mt-1">{driveError}</p>
-            {driveStatus === 'error-private' && (
-              <p className="text-xs text-white/40 mt-2">
-                Ve a Google Drive → abre el fichero → Compartir → «Cualquiera con el enlace puede ver». Luego pulsa{' '}
-                <button
-                  onClick={() => syncHistorico(true)}
-                  className="underline text-indigo-400 hover:text-indigo-300"
-                >
-                  Reintentar
-                </button>
-                {' '}o sube el Excel manualmente con el botón del encabezado.
-              </p>
-            )}
-          </div>
-        )}
-
         {/* Welcome */}
         {recomendaciones.length === 0 && !cargando && (
           <div className="mb-8 pt-6">
@@ -293,23 +202,17 @@ export default function HomePage() {
               Asistente de <span className="gradient-text">Compras Vidal</span>
             </h1>
             <p className="text-sm text-white/40 leading-relaxed max-w-lg">
-              Pega un aviso iOCC, describe los materiales o sube una foto. La IA busca en el histórico de compras SAP y te recomienda proveedor y código para cada línea.
+              Pega un aviso iOCC, describe los materiales o sube una foto. La IA aplica el algoritmo de 5 pasos sobre la base de datos de proveedores y te recomienda proveedor y código SAP para cada línea.
             </p>
-            {driveStatus === 'syncing' && (
-              <div className="mt-3 flex items-center gap-2 text-xs text-indigo-400/70">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Sincronizando histórico desde Google Drive…
-              </div>
-            )}
-            {driveStatus === 'ok' && historicoCargado && (
+            {dbStats.saps > 0 && (
               <p className="mt-3 text-xs text-emerald-400/60">
-                ✓ Histórico sincronizado — {historico.length.toLocaleString('es-ES')} registros listos
+                ✓ Base de datos lista — {dbStats.saps.toLocaleString('es-ES')} SAPs · {dbStats.marcas} marcas · {dbStats.proveedores} proveedores
               </p>
             )}
           </div>
         )}
 
-        <InputZone onAnalizar={handleAnalizar} cargando={cargando} historicoCargado={historicoCargado} />
+        <InputZone onAnalizar={handleAnalizar} cargando={cargando} historicoCargado={dbStats.saps > 0} />
 
         {/* Progress log */}
         {(cargando || log.length > 0) && (
@@ -384,7 +287,7 @@ export default function HomePage() {
             ))}
 
             <div className="mt-6">
-              <ExportSAP recomendaciones={recomendaciones} />
+              <ExportSAP recomendaciones={recsParaExport} />
             </div>
           </div>
         )}
@@ -417,5 +320,30 @@ async function fileToBase64(file: File): Promise<string> {
     reader.onload = () => resolve((reader.result as string).split(',')[1])
     reader.onerror = reject
     reader.readAsDataURL(file)
+  })
+}
+
+// Comprime imagen antes de OCR para reducir payload
+async function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX = 1200
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1])
+    }
+    img.onerror = reject
+    img.src = url
   })
 }

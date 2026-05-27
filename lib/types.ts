@@ -54,6 +54,7 @@ export interface RecomendacionPrincipal {
   motivo: string
 }
 
+// Legacy type (kept for ExportSAP compatibility)
 export interface Recomendacion {
   cantidad: number
   material_detectado: string
@@ -63,4 +64,28 @@ export interface Recomendacion {
   observaciones: string
   seleccionado?: boolean
   _fuzzyData?: FuzzyResult
+  // New fields from /api/recommend
+  tipo_material?: string
+  marca_detectada?: string
+  proveedor_recomendado?: { nombre: string; codigo: string }
+  alternativas_nuevas?: Array<{ nombre: string; codigo: string; nota?: string }>
+  codigos_sap_sugeridos?: Array<{ codigo: string; descripcion: string; proveedor: string }>
+  motivo?: string
+  _pasoDeterminante?: number
+}
+
+// New unified recommendation type from /api/recommend
+export interface RecomendacionNueva {
+  cantidad: number
+  material_detectado: string
+  tipo_material: string
+  marca_detectada: string
+  proveedor_recomendado: { nombre: string; codigo: string }
+  alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
+  codigos_sap_sugeridos: Array<{ codigo: string; descripcion: string; proveedor: string }>
+  nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
+  motivo: string
+  observaciones: string
+  seleccionado: boolean
+  _pasoDeterminante: number
 }

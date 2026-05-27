@@ -1,60 +1,15 @@
 'use client'
 
-import { ShoppingCart, Database, RefreshCw, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
-
-type DriveStatus = 'idle' | 'syncing' | 'ok' | 'error-private' | 'error'
+import { ShoppingCart, Database } from 'lucide-react'
 
 interface HeaderProps {
-  historicoCargado: boolean
-  filas: number
-  driveStatus: DriveStatus
-  onOpenSetup: () => void
-  onSync: () => void
+  marcas: number
+  proveedores: number
+  saps: number
 }
 
-export default function Header({ historicoCargado, filas, driveStatus, onOpenSetup, onSync }: HeaderProps) {
-  const isSyncing = driveStatus === 'syncing'
-  const isError = driveStatus === 'error' || driveStatus === 'error-private'
-
-  const statusColor = isSyncing
-    ? '#6366f1'
-    : isError && !historicoCargado
-    ? '#f59e0b'
-    : historicoCargado
-    ? '#10b981'
-    : 'rgba(255,255,255,0.3)'
-
-  const statusBg = isSyncing
-    ? 'rgba(99,102,241,0.06)'
-    : isError && !historicoCargado
-    ? 'rgba(245,158,11,0.06)'
-    : historicoCargado
-    ? 'rgba(16,185,129,0.06)'
-    : 'rgba(255,255,255,0.03)'
-
-  const statusBorder = isSyncing
-    ? 'rgba(99,102,241,0.2)'
-    : isError && !historicoCargado
-    ? 'rgba(245,158,11,0.2)'
-    : historicoCargado
-    ? 'rgba(16,185,129,0.2)'
-    : 'rgba(255,255,255,0.07)'
-
-  const StatusIcon = isSyncing
-    ? Loader2
-    : isError && !historicoCargado
-    ? AlertTriangle
-    : historicoCargado
-    ? CheckCircle
-    : Database
-
-  const label = isSyncing
-    ? 'Sincronizando…'
-    : isError && !historicoCargado
-    ? 'Error al cargar'
-    : historicoCargado
-    ? `${filas.toLocaleString('es-ES')} filas`
-    : 'Sin histórico'
+export default function Header({ marcas, proveedores, saps }: HeaderProps) {
+  const listo = saps > 0
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 border-b border-white/[0.06] bg-[#08080f]/80 backdrop-blur-xl">
@@ -70,35 +25,28 @@ export default function Header({ historicoCargado, filas, driveStatus, onOpenSet
           </div>
         </div>
 
-        {/* Histórico status + botones */}
+        {/* DB status */}
         <div className="flex items-center gap-2">
-          {/* Sync button */}
-          <button
-            onClick={onSync}
-            disabled={isSyncing}
-            title="Resincronizar histórico desde Google Drive"
-            className="p-1.5 rounded-lg border border-white/07 hover:border-white/15 hover:bg-white/03 transition-all text-white/25 hover:text-white/55 disabled:opacity-30 disabled:cursor-not-allowed"
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all duration-200"
+            style={{
+              background: listo ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+              borderColor: listo ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.07)',
+            }}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* Status badge */}
-          <button
-            onClick={onOpenSetup}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all duration-200 group"
-            style={{ background: statusBg, borderColor: statusBorder }}
-          >
-            <StatusIcon
-              className={`w-3.5 h-3.5 flex-shrink-0 ${isSyncing ? 'animate-spin' : ''}`}
-              style={{ color: statusColor }}
+            <Database
+              className="w-3.5 h-3.5 flex-shrink-0"
+              style={{ color: listo ? '#10b981' : 'rgba(255,255,255,0.3)' }}
             />
-            <span className="text-xs font-medium" style={{ color: statusColor }}>
-              {label}
+            <span
+              className="text-xs font-medium"
+              style={{ color: listo ? '#10b981' : 'rgba(255,255,255,0.3)' }}
+            >
+              {listo
+                ? `${saps.toLocaleString('es-ES')} SAPs · ${marcas} marcas · ${proveedores} proveedores`
+                : 'Cargando base de datos…'}
             </span>
-            <span className="text-xs text-white/20 group-hover:text-white/40 transition-colors hidden sm:inline">
-              · Excel
-            </span>
-          </button>
+          </div>
         </div>
       </div>
     </header>

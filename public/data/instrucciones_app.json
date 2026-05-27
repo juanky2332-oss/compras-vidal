@@ -1,0 +1,46 @@
+[
+  {
+    "SECCIÓN": "PROPÓSITO DE ESTA BASE DE DATOS",
+    "CONTENIDO": "Esta hoja Excel es la fuente de conocimiento de la app de asistencia de compras industriales. Contiene el histórico completo de compras (ene 2025 – may 2026), perfilado por proveedor, tipo de material y código SAP, ajustado tras revisión manual del responsable de compras."
+  },
+  {
+    "SECCIÓN": "ESTRUCTURA DEL ARCHIVO",
+    "CONTENIDO": "1) INSTRUCCIONES_APP — Esta hoja (manual de uso para la app).\n2) MARCAS_A_PROVEEDOR — Lookup directo marca → proveedor. Primer índice a consultar.\n3) GUIA_POR_TIPO_MATERIAL — Tabla de matching por palabras clave; PRINCIPAL + 2 alternativas.\n4) PROVEEDORES — Ficha de cada uno de los 244 proveedores con categoría, marca, volumen y prioridad.\n5) SAP_HISTORICO — Los 6.368 SAPs usados, con proveedor habitual y candidatos a centralizar.\n6) HISTORICO_COMPLETO — Volcado limpio del histórico para trazabilidad."
+  },
+  {
+    "SECCIÓN": "ALGORITMO DE DECISIÓN PARA LA APP",
+    "CONTENIDO": "PASO 1 · Detectar MARCA exacta en la solicitud → buscar en MARCAS_A_PROVEEDOR.\n   Ej.: 'sensor OMRON E3F-DS10' → Electromain. 'conector ILME CKS-16' → CEF.\n\nPASO 2 · Si no hay marca, detectar TIPO DE MATERIAL por palabras clave → GUIA_POR_TIPO_MATERIAL.\n   Ej.: 'rodamiento 6205 2RS' → ESGAS. 'banda modular' → Habasit. 'latiguillo hidráulico' → Suministros Palazón.\n\nPASO 3 · Si hay CÓDIGO SAP en la solicitud → buscar en SAP_HISTORICO.\n   Si Veces con Principal / Veces Comprado > 70% → confianza ALTA, usar sin dudar.\n\nPASO 4 · Fallback por CATEGORÍA → buscar proveedor con mayor volumen en esa categoría.\n\nPASO 5 · Si nada encaja → pedir aclaración antes de inventar proveedor."
+  },
+  {
+    "SECCIÓN": "EQUIVALENCIAS Y AVISOS CRÍTICOS (LEER SIEMPRE)",
+    "CONTENIDO": "▸ BERDIN — Códigos 100025296 (BERDIN MURCIA) y 100035845 (BERDIN LEVANTE) son la MISMA empresa (cambio de razón social). Para nuevos pedidos usar 100035845 BERDIN LEVANTE como referencia, pero los pedidos antiguos al 100025296 son válidos. NO marcar el 100025296 como inválido.\n\n▸ EFIX = código SAP 100034920. En SAP figura literalmente como 'INOXIDABLES DE MOLINA DE, S.L.' por herencia, pero el proveedor real al que se compra con ese código es EFIX. La app debe tratar TODA compra a 100034920 como EFIX (inoxidable alimentario y motores).\n\n▸ MATINOX (100025303) está EN DECLIVE. Las compras de inox que antes iban a Matinox se han trasladado a EFIX (100034920). Para nuevos pedidos de inox priorizar EFIX; Matinox solo si el material es específico suyo.\n\n▸ INGEIN NO es proveedor directo en SAP. Las verificaciones de báscula INGEIN se canalizan a través de BYSS — BASCULAS Y SIST.SURESTE,S.L.U. (100025290). La app debe pedir el servicio a BYSS.\n\n▸ IPREMUR (100034742, 'IPREMUR INTEGRAC PESAJE') es el proveedor preferente para EQUIPOS NUEVOS MARKEM e integraciones de pesaje. Está dado de alta en SAP pero aún sin compras en el histórico. Usar para nuevos proyectos. Para REPUESTOS MARKEM seguir con MURCIA CODIFICACIÓN."
+  },
+  {
+    "SECCIÓN": "MAPEO MARCA → PROVEEDOR HABITUAL",
+    "CONTENIDO": "Eléctrico / Automatización:\n  ILME → CEF · UNEX → Berdin Levante (100035845, equiv. 100025296) · OMRON → Electromain · SICK → TCA · SCHNEIDER → Berdin Levante · B&R → Smarlogy · IFM/LEUZE/CONTRINEX → Electromain · SIMON/LEGRAND → CEF · PILZ → Smarlogy o Electromain.\n\nMecánica / Transmisión:\n  SKF/FAG/NSK/NTN → ESGAS (alt. Rodamientos y Servicios, Royse) · REXNORD → Dexiberica · SEDIS → ESGAS · SUGIYAMA → Manuel Just Verdú · HABASIT → directo · AMMERAAL → Ammega · GATES SPZ → ESGAS o Dexiberica.\n\nBombas / Estanqueidad:\n  FRISTAM, INOXPA, NETZSCH, NEMO/KIBER, CSF/LIDERING → José Gomariz Hernández · GRUNDFOS/LOWARA/ESPA → CIG.\n\nNeumática / Hidráulica:\n  Juntas tóricas e hidráulica → Hidráulica del Segura · Latiguillos → Suministros Palazón o Hidráulica del Segura.\n\nMarcaje / Pesaje:\n  MARKEM repuestos → Murcia Codificación · MARKEM equipos nuevos → IPREMUR (100034742) · VIDEOJET/DOMINO → JDL · Básculas → BYSS (100025290) · Verificaciones báscula → solicitar a BYSS que las canalice con INGEIN.\n\nInox / Motores:\n  Inox alimentario y motores eléctricos → EFIX (100034920) · alternativa Matinox (en declive) y Comercial Industrial García · Hierro → Hierros Paredes.\n\nFontanería / Tuberías:\n  PVC y fontanería → Cerbel o Comercial Industrial García · Material detectable alimentario → Plásticos Detectables.\n\nTornillería / Ferretería:\n  Tornillos y ferretería estándar → Comercial Industrial García o Ferretería del Segura · Brocas HSS → Sumurca · WÜRTH → directo.\n\nRuedas / Carretillas / Válvulas:\n  Ruedas ALEX → SIA · Carretillas → Tomi Maquinaria · Válvulas → Pontones, Contagas."
+  },
+  {
+    "SECCIÓN": "FORMATO DE RESPUESTA OBLIGATORIO DE LA APP",
+    "CONTENIDO": "Cada respuesta a una solicitud de compra debe seguir este formato (del prompt maestro):\n\nTipo de material: [Categoría detectada]\nMarca detectada: [Marca o 'no especificada']\nProveedor recomendado: [Nombre + código SAP]\nAlternativas:\n  · [Alternativa 1 + código]\n  · [Alternativa 2 + código]\nCódigos SAP sugeridos: [si hay match en histórico]\nMotivo de selección: [explicación técnica/histórica]\nObservaciones: [compatibilidades, urgencia, centralización, equivalencias de proveedor]"
+  },
+  {
+    "SECCIÓN": "JERARQUÍA DE PRIORIDADES",
+    "CONTENIDO": "1. Proveedor habitual ya utilizado.\n2. Disponibilidad rápida.\n3. Compatibilidad técnica.\n4. Historial positivo.\n5. Facilidad de gestión administrativa.\n6. Centralización (si un proveedor cubre varias familias, agrupar).\n7. Precio razonable (último criterio salvo compras grandes no urgentes).\n\nReglas duras:\n  • NUNCA recomendar proveedor aleatorio si hay uno habitual definido.\n  • Evitar abrir proveedores nuevos salvo necesidad real.\n  • En AVERÍA URGENTE → priorizar rapidez sobre precio.\n  • Si la marca tiene distribuidor habitual asignado → usar ese SIEMPRE."
+  },
+  {
+    "SECCIÓN": "CRITERIO 'CANDIDATO A CENTRALIZAR'",
+    "CONTENIDO": "En SAP_HISTORICO, los SAPs con 'Nº Proveedores Distintos' resaltado en naranja (≥3) son candidatos a centralizar. La app debe avisar: «Este código se ha pedido a 3+ proveedores. ¿Centralizar en el principal (X)?»"
+  },
+  {
+    "SECCIÓN": "PRIORIDAD DE USO DE PROVEEDOR",
+    "CONTENIDO": "CRÍTICO ≥200 compras · ALTO 50-199 · MEDIO 15-49 · BAJO 5-14 · PUNTUAL 1-4 · NUEVO 0."
+  },
+  {
+    "SECCIÓN": "FUENTES DE DATOS Y FECHA DE CORTE",
+    "CONTENIDO": "Histórico: enero 2025 – 27 mayo 2026.\nFilas: 9.867. Proveedores: 244 (+1 alta IPREMUR). SAPs únicos: 6.368.\nAuditoría 27/05/2026, revisada y corregida por responsable de compras."
+  },
+  {
+    "SECCIÓN": "COMPORTAMIENTO INTELIGENTE ESPERADO",
+    "CONTENIDO": "• Detectar errores ortográficos en marcas/materiales.\n  • Interpretar abreviaturas (RTM, SPZ, HSS, 2RS, NBR, EPDM, PTFE…).\n  • Si la solicitud está incompleta, pedir solo los datos mínimos.\n  • Ofrecer SIEMPRE 2 alternativas además del principal.\n  • Aplicar SIEMPRE las equivalencias de proveedor: 100034920 ⇒ EFIX, 100025296 ⇔ 100035845 (mismo Berdin).\n  • Aprender con cada confirmación del usuario (futuro)."
+  }
+]

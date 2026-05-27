@@ -1,0 +1,767 @@
+[
+  {
+    "Marca / Familia": "OMRON",
+    "Categoría": "Automatización",
+    "Proveedor PRINCIPAL": "Electromain",
+    "Cód. Prov. Principal": "100025271",
+    "Alternativa": "CEF Almacén Mat. Eléctrico",
+    "Cód. Alt.": "100025236",
+    "Notas": "Distribuidor habitual OMRON"
+  },
+  {
+    "Marca / Familia": "ILME",
+    "Categoría": "Conectores rectangulares",
+    "Proveedor PRINCIPAL": "CEF Almacén Mat. Eléctrico",
+    "Cód. Prov. Principal": "100025236",
+    "Alternativa": "Electromain",
+    "Cód. Alt.": "100025271",
+    "Notas": "CEF principal ILME"
+  },
+  {
+    "Marca / Familia": "UNEX",
+    "Categoría": "Canalización eléctrica",
+    "Proveedor PRINCIPAL": "Berdin Levante",
+    "Cód. Prov. Principal": "100035845",
+    "Alternativa": "Cronus Industrial",
+    "Cód. Alt.": "100034429",
+    "Notas": "Berdin principal UNEX | Equivalente: cód. 100025296 (misma empresa, razón social anterior)."
+  },
+  {
+    "Marca / Familia": "SCHNEIDER ELECTRIC",
+    "Categoría": "Material eléctrico",
+    "Proveedor PRINCIPAL": "Berdin Levante",
+    "Cód. Prov. Principal": "100035845",
+    "Alternativa": "Electromain",
+    "Cód. Alt.": "100025271",
+    "Notas": "Berdin principal Schneider"
+  },
+  {
+    "Marca / Familia": "SICK",
+    "Categoría": "Sensórica",
+    "Proveedor PRINCIPAL": "TCA Tec. Control Accionamientos",
+    "Cód. Prov. Principal": "100025265",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "TCA Murcia distribuidor SICK"
+  },
+  {
+    "Marca / Familia": "B&R / BR Automation",
+    "Categoría": "Servo/PLC",
+    "Proveedor PRINCIPAL": "Smart Technology",
+    "Cód. Prov. Principal": "GES13",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Distribuidor habitual B&R (Smarlogy)"
+  },
+  {
+    "Marca / Familia": "IFM",
+    "Categoría": "Sensórica",
+    "Proveedor PRINCIPAL": "IFM Electronic (directo)",
+    "Cód. Prov. Principal": "100034067",
+    "Alternativa": "Electromain",
+    "Cód. Alt.": "100025271",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "LEUZE",
+    "Categoría": "Barreras seguridad",
+    "Proveedor PRINCIPAL": "Leuze Electronic (directo)",
+    "Cód. Prov. Principal": "100025288",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "CONTRINEX",
+    "Categoría": "Detectores",
+    "Proveedor PRINCIPAL": "Intertronic Internacional",
+    "Cód. Prov. Principal": "100033945",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Especialista detectores"
+  },
+  {
+    "Marca / Familia": "DI-SORIC",
+    "Categoría": "Detectores ópticos",
+    "Proveedor PRINCIPAL": "Intertronic Internacional",
+    "Cód. Prov. Principal": "100033945",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Especialista detectores"
+  },
+  {
+    "Marca / Familia": "VEGA",
+    "Categoría": "Instrumentación nivel",
+    "Proveedor PRINCIPAL": "VEGA Instrumentos (directo)",
+    "Cód. Prov. Principal": "100034048",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "ENDRESS+HAUSER",
+    "Categoría": "Instrumentación",
+    "Proveedor PRINCIPAL": "Endress+Hauser (directo)",
+    "Cód. Prov. Principal": "100034416",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "SIMON",
+    "Categoría": "Mecanismos eléctricos",
+    "Proveedor PRINCIPAL": "Novelec Segura",
+    "Cód. Prov. Principal": "100025297",
+    "Alternativa": "Berdin Levante",
+    "Cód. Alt.": "100035845",
+    "Notas": "Simon Alpino"
+  },
+  {
+    "Marca / Familia": "PILZ",
+    "Categoría": "Seguridad",
+    "Proveedor PRINCIPAL": "Sonepar Ibérica",
+    "Cód. Prov. Principal": "100025310",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Material seguridad"
+  },
+  {
+    "Marca / Familia": "ABB",
+    "Categoría": "Material eléctrico",
+    "Proveedor PRINCIPAL": "Sonepar Ibérica",
+    "Cód. Prov. Principal": "100025310",
+    "Alternativa": "Berdin Levante",
+    "Cód. Alt.": "100035845",
+    "Notas": "-"
+  },
+  {
+    "Marca / Familia": "BAUMER",
+    "Categoría": "Sensores",
+    "Proveedor PRINCIPAL": "Baumer Automación",
+    "Cód. Prov. Principal": "100035071",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "HABASIT",
+    "Categoría": "Bandas transportadoras",
+    "Proveedor PRINCIPAL": "Habasit Hispánica",
+    "Cód. Prov. Principal": "100025333",
+    "Alternativa": "Ammega Belting",
+    "Cód. Alt.": "100034603",
+    "Notas": "Habasit principal"
+  },
+  {
+    "Marca / Familia": "AMMERAAL / AMMEGA",
+    "Categoría": "Bandas transportadoras",
+    "Proveedor PRINCIPAL": "Ammega Belting Spain",
+    "Cód. Prov. Principal": "100034603",
+    "Alternativa": "Habasit Hispánica",
+    "Cód. Alt.": "100025333",
+    "Notas": "Ammega es ex-Ammeraal"
+  },
+  {
+    "Marca / Familia": "SMC",
+    "Categoría": "Neumática",
+    "Proveedor PRINCIPAL": "Suministros Neumáticos ISPA",
+    "Cód. Prov. Principal": "100025295",
+    "Alternativa": "Sum. Intec",
+    "Cód. Alt.": "100025244",
+    "Notas": "ISPA principal SMC"
+  },
+  {
+    "Marca / Familia": "FESTO",
+    "Categoría": "Neumática",
+    "Proveedor PRINCIPAL": "Feragro Suministros",
+    "Cód. Prov. Principal": "100025289",
+    "Alternativa": "Suministros Neumáticos ISPA",
+    "Cód. Alt.": "100025295",
+    "Notas": "FESTO menor frecuencia"
+  },
+  {
+    "Marca / Familia": "JOUCOMATIC / ASCO",
+    "Categoría": "Electroválvulas",
+    "Proveedor PRINCIPAL": "Baño Industrial Sumin.",
+    "Cód. Prov. Principal": "100034028",
+    "Alternativa": "Rubix Iberia",
+    "Cód. Alt.": "100025313",
+    "Notas": "Especialista Joucomatic"
+  },
+  {
+    "Marca / Familia": "ELESA",
+    "Categoría": "Asas/bisagras inox",
+    "Proveedor PRINCIPAL": "Baño Industrial Sumin.",
+    "Cód. Prov. Principal": "100034028",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "ELESA herrajes inox"
+  },
+  {
+    "Marca / Familia": "LEGRIS",
+    "Categoría": "Racores neumáticos",
+    "Proveedor PRINCIPAL": "Sum. Intec",
+    "Cód. Prov. Principal": "100025244",
+    "Alternativa": "Suministros Neumáticos ISPA",
+    "Cód. Alt.": "100025295",
+    "Notas": "Racores latón Legris"
+  },
+  {
+    "Marca / Familia": "GENEBRE",
+    "Categoría": "Válvulas bola",
+    "Proveedor PRINCIPAL": "Pontones Guillamón",
+    "Cód. Prov. Principal": "100033923",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Genebre principal"
+  },
+  {
+    "Marca / Familia": "HOFMA",
+    "Categoría": "Válvulas asiento inclinado",
+    "Proveedor PRINCIPAL": "Contagas",
+    "Cód. Prov. Principal": "100034263",
+    "Alternativa": "Pontones Guillamón",
+    "Cód. Alt.": "100033923",
+    "Notas": "Contagas HOFMA"
+  },
+  {
+    "Marca / Familia": "ARI / ARI-FABA",
+    "Categoría": "Válvulas industriales",
+    "Proveedor PRINCIPAL": "Valvulinox",
+    "Cód. Prov. Principal": "100034395",
+    "Alternativa": "Pontones Guillamón",
+    "Cód. Alt.": "100033923",
+    "Notas": "Valvulinox ARI"
+  },
+  {
+    "Marca / Familia": "INOXPA",
+    "Categoría": "Bombas/válvulas alim.",
+    "Proveedor PRINCIPAL": "Alfa Cediva",
+    "Cód. Prov. Principal": "100034454",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Alfa Cediva INOXPA"
+  },
+  {
+    "Marca / Familia": "ESTAMPINOX / ELMO",
+    "Categoría": "Bombas/válvulas alim.",
+    "Proveedor PRINCIPAL": "Alfa Cediva",
+    "Cód. Prov. Principal": "100034454",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Vía Alfa Cediva"
+  },
+  {
+    "Marca / Familia": "FRISTAM",
+    "Categoría": "Bombas alimentarias",
+    "Proveedor PRINCIPAL": "José Gomariz Hernández",
+    "Cód. Prov. Principal": "100025420",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Fristam exclusivo Gomariz"
+  },
+  {
+    "Marca / Familia": "LOWARA",
+    "Categoría": "Bombas",
+    "Proveedor PRINCIPAL": "José Gomariz Hernández",
+    "Cód. Prov. Principal": "100025420",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Lowara exclusivo Gomariz"
+  },
+  {
+    "Marca / Familia": "NETZSCH",
+    "Categoría": "Bombas mono",
+    "Proveedor PRINCIPAL": "José Gomariz Hernández",
+    "Cód. Prov. Principal": "100025420",
+    "Alternativa": "Tecnología Ambiental",
+    "Cód. Alt.": "100034116",
+    "Notas": "Netzsch vía Gomariz"
+  },
+  {
+    "Marca / Familia": "ESHE",
+    "Categoría": "Bombas",
+    "Proveedor PRINCIPAL": "José Gomariz Hernández",
+    "Cód. Prov. Principal": "100025420",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Gomariz exclusivo"
+  },
+  {
+    "Marca / Familia": "ESPASEME",
+    "Categoría": "Bombas",
+    "Proveedor PRINCIPAL": "José Gomariz Hernández",
+    "Cód. Prov. Principal": "100025420",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Gomariz exclusivo"
+  },
+  {
+    "Marca / Familia": "WAUKESHA",
+    "Categoría": "Bombas alimentarias",
+    "Proveedor PRINCIPAL": "Axflow",
+    "Cód. Prov. Principal": "100034266",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Axflow Waukesha"
+  },
+  {
+    "Marca / Familia": "SPX FLOW",
+    "Categoría": "Bombas/equipos proceso",
+    "Proveedor PRINCIPAL": "SPX Flow Europe",
+    "Cód. Prov. Principal": "100035018",
+    "Alternativa": "Axflow",
+    "Cód. Alt.": "100034266",
+    "Notas": "Axflow alternativa SPX"
+  },
+  {
+    "Marca / Familia": "GRUNDFOS",
+    "Categoría": "Bombas",
+    "Proveedor PRINCIPAL": "Feragro Suministros",
+    "Cód. Prov. Principal": "100025289",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Feragro Grundfos"
+  },
+  {
+    "Marca / Familia": "NEMO / KIBER / AB22",
+    "Categoría": "Bombas mono statores",
+    "Proveedor PRINCIPAL": "Tecnología Ambiental y Serv.",
+    "Cód. Prov. Principal": "100034116",
+    "Alternativa": "Gargil Suministros",
+    "Cód. Alt.": "100034244",
+    "Notas": "Especialista statores"
+  },
+  {
+    "Marca / Familia": "CSF / LIDERING",
+    "Categoría": "Cierres mecánicos",
+    "Proveedor PRINCIPAL": "Gargil Suministros",
+    "Cód. Prov. Principal": "100034244",
+    "Alternativa": "José Gomariz Hernández",
+    "Cód. Alt.": "100025420",
+    "Notas": "Gargil M65/CSF/Lidering"
+  },
+  {
+    "Marca / Familia": "SAMSON",
+    "Categoría": "Válvulas control",
+    "Proveedor PRINCIPAL": "Samson",
+    "Cód. Prov. Principal": "100034087",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "SPIRAX-SARCO",
+    "Categoría": "Purgadores vapor",
+    "Proveedor PRINCIPAL": "Spirax-Sarco",
+    "Cód. Prov. Principal": "100025408",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "SEDIS",
+    "Categoría": "Cadenas",
+    "Proveedor PRINCIPAL": "ESGAS Accesorios",
+    "Cód. Prov. Principal": "100025419",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Sedis vía ESGAS"
+  },
+  {
+    "Marca / Familia": "SUGIYAMA",
+    "Categoría": "Cadenas",
+    "Proveedor PRINCIPAL": "Manuel Just Verdú",
+    "Cód. Prov. Principal": "100025255",
+    "Alternativa": "EINA",
+    "Cód. Alt.": "100034445",
+    "Notas": "Sugiyama por Verdú"
+  },
+  {
+    "Marca / Familia": "REXNORD",
+    "Categoría": "Cadenas",
+    "Proveedor PRINCIPAL": "Dexiberica Soluciones Indust.",
+    "Cód. Prov. Principal": "100025355",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Rexnord por Dexiberica"
+  },
+  {
+    "Marca / Familia": "ROSSI",
+    "Categoría": "Reductoras",
+    "Proveedor PRINCIPAL": "Dexiberica Soluciones Indust.",
+    "Cód. Prov. Principal": "100025355",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Reductores Rossi"
+  },
+  {
+    "Marca / Familia": "SKF / INA / FAG / NSK",
+    "Categoría": "Rodamientos",
+    "Proveedor PRINCIPAL": "ESGAS Accesorios",
+    "Cód. Prov. Principal": "100025419",
+    "Alternativa": "Rodamientos y Servicios",
+    "Cód. Alt.": "100034340",
+    "Notas": "ESGAS principal"
+  },
+  {
+    "Marca / Familia": "WURTH",
+    "Categoría": "Consumibles fijación",
+    "Proveedor PRINCIPAL": "Würth España",
+    "Cód. Prov. Principal": "100025253",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "ALEX",
+    "Categoría": "Ruedas industriales",
+    "Proveedor PRINCIPAL": "SIA Suministros Arnaldos",
+    "Cód. Prov. Principal": "100025088",
+    "Alternativa": "Sumymaq Levante",
+    "Cód. Alt.": "100036804",
+    "Notas": "SIA Alex"
+  },
+  {
+    "Marca / Familia": "FACOM",
+    "Categoría": "Herramienta manual",
+    "Proveedor PRINCIPAL": "SIA Suministros Arnaldos",
+    "Cód. Prov. Principal": "100025088",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "SIA Facom"
+  },
+  {
+    "Marca / Familia": "FISCHER",
+    "Categoría": "Anclajes/tacos",
+    "Proveedor PRINCIPAL": "SIA Suministros Arnaldos",
+    "Cód. Prov. Principal": "100025088",
+    "Alternativa": "Maq. y Herram. Sureste",
+    "Cód. Alt.": "100025249",
+    "Notas": "Fischer tacos/anclajes"
+  },
+  {
+    "Marca / Familia": "BOSCH",
+    "Categoría": "Herramienta",
+    "Proveedor PRINCIPAL": "SIA Suministros Arnaldos",
+    "Cód. Prov. Principal": "100025088",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "-"
+  },
+  {
+    "Marca / Familia": "OERLIKON",
+    "Categoría": "Electrodos soldadura",
+    "Proveedor PRINCIPAL": "Maq. y Herram. Sureste",
+    "Cód. Prov. Principal": "100025249",
+    "Alternativa": "Soldufer",
+    "Cód. Alt.": "100025404",
+    "Notas": "Electrodos soldadura"
+  },
+  {
+    "Marca / Familia": "CRC (alimentario H1)",
+    "Categoría": "Sprays/químicos",
+    "Proveedor PRINCIPAL": "Soldufer Servicios Indust.",
+    "Cód. Prov. Principal": "100025404",
+    "Alternativa": "Würth",
+    "Cód. Alt.": "100025253",
+    "Notas": "CRC alimentarios"
+  },
+  {
+    "Marca / Familia": "PROLUTEC",
+    "Categoría": "Lubricantes alim.",
+    "Proveedor PRINCIPAL": "Prolutec",
+    "Cód. Prov. Principal": "100025282",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "NEVASTANE",
+    "Categoría": "Aceite alimentario",
+    "Proveedor PRINCIPAL": "Sidex Suministros",
+    "Cód. Prov. Principal": "100025421",
+    "Alternativa": "Prolutec",
+    "Cód. Alt.": "100025282",
+    "Notas": "Sidex Nevastane"
+  },
+  {
+    "Marca / Familia": "KURITA",
+    "Categoría": "Tratamiento agua",
+    "Proveedor PRINCIPAL": "Kurita Ibérica",
+    "Cód. Prov. Principal": "100034388",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "MARKEM / DOMINO",
+    "Categoría": "Codificadores tinta",
+    "Proveedor PRINCIPAL": "Murcia Codificación",
+    "Cód. Prov. Principal": "100033915",
+    "Alternativa": "IPREMUR (alta pendiente)",
+    "Cód. Alt.": "PENDIENTE_ALTA",
+    "Notas": "Murcia Codificación preferente"
+  },
+  {
+    "Marca / Familia": "VIDEOJET",
+    "Categoría": "Codificadores",
+    "Proveedor PRINCIPAL": "JDL Pesaje e Identificación",
+    "Cód. Prov. Principal": "100033961",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "JDL Videojet"
+  },
+  {
+    "Marca / Familia": "BIZERBA",
+    "Categoría": "Pesaje industrial",
+    "Proveedor PRINCIPAL": "Bizerba Iberia España",
+    "Cód. Prov. Principal": "100034521",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "ULMA",
+    "Categoría": "Termoselladoras",
+    "Proveedor PRINCIPAL": "ULMA Packaging",
+    "Cód. Prov. Principal": "100034164",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "LANTECH",
+    "Categoría": "Flejadoras/paletizado",
+    "Proveedor PRINCIPAL": "ATP Engineering Packaging",
+    "Cód. Prov. Principal": "100034064",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "ATP distribuidor"
+  },
+  {
+    "Marca / Familia": "NORDSON",
+    "Categoría": "Hot melt cola",
+    "Proveedor PRINCIPAL": "Nordson Ibérica",
+    "Cód. Prov. Principal": "100033928",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "ROVEMA",
+    "Categoría": "Empaquetadoras",
+    "Proveedor PRINCIPAL": "Rovema Spain & Portugal",
+    "Cód. Prov. Principal": "100034156",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "ALLGAIER / MOGENSEN",
+    "Categoría": "Tamiz vibratorio",
+    "Proveedor PRINCIPAL": "Allgaier Mogensen",
+    "Cód. Prov. Principal": "100034332",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "IMCO",
+    "Categoría": "Dosificadoras",
+    "Proveedor PRINCIPAL": "IMCO Process & Packaging",
+    "Cód. Prov. Principal": "100033950",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "SOCO SYSTEM",
+    "Categoría": "Encajadoras",
+    "Proveedor PRINCIPAL": "Soco System Spain",
+    "Cód. Prov. Principal": "100033937",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "TARNOS",
+    "Categoría": "Vibradores industriales",
+    "Proveedor PRINCIPAL": "Tarnos",
+    "Cód. Prov. Principal": "100033940",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "NETTER",
+    "Categoría": "Vibradores neumáticos",
+    "Proveedor PRINCIPAL": "Netter Vibration España",
+    "Cód. Prov. Principal": "100034230",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "TFT / TANIS",
+    "Categoría": "Espumadora",
+    "Proveedor PRINCIPAL": "Tanis Food Tec BV",
+    "Cód. Prov. Principal": "100034320",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "GEA",
+    "Categoría": "Maquinaria alimentaria",
+    "Proveedor PRINCIPAL": "GEA Food Solutions",
+    "Cód. Prov. Principal": "100034983",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "WITTMANN BATTENFELD",
+    "Categoría": "Inyección plástico",
+    "Proveedor PRINCIPAL": "Wittmann Battenfeld Spain",
+    "Cód. Prov. Principal": "100034057",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "EUROSICMA",
+    "Categoría": "Envolvedoras italianas",
+    "Proveedor PRINCIPAL": "Eurosicma",
+    "Cód. Prov. Principal": "100033916",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Importación Italia"
+  },
+  {
+    "Marca / Familia": "ACKLEY / HARTNETT",
+    "Categoría": "Impresión píldoras",
+    "Proveedor PRINCIPAL": "Ackley Machine Corporation",
+    "Cód. Prov. Principal": "100034212",
+    "Alternativa": "R-V Industries",
+    "Cód. Alt.": "100040379",
+    "Notas": "Importación USA"
+  },
+  {
+    "Marca / Familia": "RUFINATTI / RUFFINATI",
+    "Categoría": "Cuchillas regaliz",
+    "Proveedor PRINCIPAL": "Técnicas de Envoltura",
+    "Cód. Prov. Principal": "100034104",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Especialista"
+  },
+  {
+    "Marca / Familia": "HRS",
+    "Categoría": "Intercambiadores calor",
+    "Proveedor PRINCIPAL": "HRS Heat Exchangers",
+    "Cód. Prov. Principal": "100034239",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "ARMAFLEX / EUROBATEX / KAIFLEX",
+    "Categoría": "Aislamiento térmico",
+    "Proveedor PRINCIPAL": "Mesespa",
+    "Cód. Prov. Principal": "100025393",
+    "Alternativa": "Térmica Murciana",
+    "Cód. Alt.": "100034020",
+    "Notas": "Mesespa principal"
+  },
+  {
+    "Marca / Familia": "STARLITE / ERTALYTE",
+    "Categoría": "Plásticos técnicos",
+    "Proveedor PRINCIPAL": "Polifluor",
+    "Cód. Prov. Principal": "100034177",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Polifluor especialista"
+  },
+  {
+    "Marca / Familia": "A-SAFE",
+    "Categoría": "Barreras protección",
+    "Proveedor PRINCIPAL": "A-SAFE Soluciones",
+    "Cód. Prov. Principal": "100025349",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "PIRINEO (puertas)",
+    "Categoría": "Chapa puertas",
+    "Proveedor PRINCIPAL": "Troquelajes Yagués",
+    "Cód. Prov. Principal": "100034033",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Especialista"
+  },
+  {
+    "Marca / Familia": "MECALUX",
+    "Categoría": "Estanterías",
+    "Proveedor PRINCIPAL": "Mecalux Levante",
+    "Cód. Prov. Principal": "100025229",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "TOYOTA (carretillas)",
+    "Categoría": "Carretillas",
+    "Proveedor PRINCIPAL": "Toyota Automated Logistics",
+    "Cód. Prov. Principal": "100025208",
+    "Alternativa": "Tomi Maquinaria",
+    "Cód. Alt.": "100025227",
+    "Notas": "Tomi Maquinaria preferente"
+  },
+  {
+    "Marca / Familia": "NICOTRA / TECNIFAN",
+    "Categoría": "Turbinas/ventiladores",
+    "Proveedor PRINCIPAL": "Comufri",
+    "Cód. Prov. Principal": "100033902",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Especialista turbinas"
+  },
+  {
+    "Marca / Familia": "AAF",
+    "Categoría": "Filtros aire",
+    "Proveedor PRINCIPAL": "AAF",
+    "Cód. Prov. Principal": "100033922",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "FISAIR",
+    "Categoría": "Humidificación",
+    "Proveedor PRINCIPAL": "Fisair Ibérica",
+    "Cód. Prov. Principal": "100035010",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  },
+  {
+    "Marca / Familia": "HORIBA",
+    "Categoría": "Electrodos lab",
+    "Proveedor PRINCIPAL": "GEDILAB",
+    "Cód. Prov. Principal": "100034587",
+    "Alternativa": "TecnoQuim",
+    "Cód. Alt.": "100025237",
+    "Notas": "GEDILAB Horiba"
+  },
+  {
+    "Marca / Familia": "LATTY",
+    "Categoría": "Estanqueidad",
+    "Proveedor PRINCIPAL": "Estanqueidad LATTY",
+    "Cód. Prov. Principal": "100034050",
+    "Alternativa": "-",
+    "Cód. Alt.": "-",
+    "Notas": "Marca directa"
+  }
+]
