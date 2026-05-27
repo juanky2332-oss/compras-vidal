@@ -31,6 +31,17 @@ const MATINOX_CODE = '100025303'
 const EFIX_CODE = '100034920'
 const EFIX_NOMBRE = 'EFIX'
 
+// Marcas con proveedor conocido pero no presentes en la tabla MARCAS_A_PROVEEDOR
+const MARCAS_OVERRIDE: Array<{ tokens: string[]; nombre: string; codigo: string; tipo: string; nota: string }> = [
+  {
+    tokens: ['motovario', 'moto vario'],
+    nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA',
+    codigo: '100025256',
+    tipo: 'Motorreductores / variadores Motovario',
+    nota: 'Proveedor habitual para equipos Motovario (motorreductores, variadores de velocidad)',
+  },
+]
+
 function norm(s: string): string {
   return (s ?? '')
     .toLowerCase()
@@ -167,6 +178,24 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     }
   }
 
+  // PASO 0: Marcas hardcodeadas (override, mayor prioridad que MARCAS_A_PROVEEDOR)
+  for (const override of MARCAS_OVERRIDE) {
+    if (override.tokens.some((t) => descNorm.includes(t))) {
+      pasoDeterminante = 1
+      marcaDetectada = override.tokens[0].charAt(0).toUpperCase() + override.tokens[0].slice(1)
+      tipoMaterial = override.tipo
+      categoria = 'MOTORES'
+      principal = { nombre: override.nombre, codigo: override.codigo, nota: override.nota }
+      sapsSugeridos = db.sapHistorico
+        .filter((s) => !esSapGenerico(s['Código SAP']) && norm(s['Nombre Proveedor PRINCIPAL']).includes('garcia'))
+        .filter((s) => norm(s['Descripción Material']).includes('motor') || norm(s['Descripción Material']).includes('reductor') || norm(s['Descripción Material']).includes('motovario'))
+        .sort((a, b) => Number(b['Veces Comprado']) - Number(a['Veces Comprado']))
+        .slice(0, 3)
+        .map((s) => ({ codigo: s['Código SAP'], descripcion: s['Descripción Material'], proveedor: s['Nombre Proveedor PRINCIPAL'] }))
+      return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
+    }
+  }
+
   // PASO 1: Marca
   const marcaResult = paso1Marca(descNorm, db.marcas)
   if (marcaResult) {
@@ -260,12 +289,12 @@ function inferirCategoria(descNorm: string): string {
   const mapaCategorias: Array<{ keywords: string[]; categoria: string }> = [
     { keywords: ['rodamiento', 'cojinete', 'bearing'], categoria: 'RODAMIENTOS' },
     { keywords: ['banda', 'correa', 'transportadora', 'conveyor'], categoria: 'BANDAS TRANSPORTADORAS' },
-    { keywords: ['motor', 'servo', 'variador', 'inverter'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
-    { keywords: ['contactor', 'rele', 'magnetotermico', 'disyuntor', 'interruptor', 'pulsador'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
-    { keywords: ['sensor', 'detector', 'encoder', 'fotocélula', 'fotocelula'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
-    { keywords: ['cable', 'manguera electrica', 'hilo'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
+    { keywords: ['motoreductor', 'motorreductor', 'reductor', 'motovario', 'moto vario', 'motor electrico', 'motor trifasico'], categoria: 'MOTORES' },
+    { keywords: ['contactor', 'rele', 'magnetotermico', 'disyuntor', 'interruptor', 'pulsador', 'variador', 'inverter', 'servo'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
+    { keywords: ['sensor', 'detector', 'encoder', 'fotocelula', 'fotocélula'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
+    { keywords: ['cable', 'manguera electrica', 'hilo electrico'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
     { keywords: ['inox', 'acero inoxidable', 'machon', 'codo', 'brida', 'tuberia', 'junta', 'union'], categoria: 'INOX / FONTANERÍA' },
-    { keywords: ['bomba', 'centrifuga', 'peristaltica', 'tornillo'], categoria: 'BOMBAS' },
+    { keywords: ['bomba', 'centrifuga', 'peristaltica'], categoria: 'BOMBAS' },
     { keywords: ['neumatica', 'cilindro', 'valvula neumatica', 'presion', 'compresor'], categoria: 'NEUMÁTICA' },
     { keywords: ['hidraulica', 'latiguillo', 'manguito hidraulico'], categoria: 'HIDRÁULICA' },
     { keywords: ['tornillo', 'tuerca', 'arandela', 'ferreteria', 'perno'], categoria: 'FERRETERÍA' },

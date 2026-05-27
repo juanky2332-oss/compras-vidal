@@ -194,19 +194,20 @@ export default function HomePage() {
 
       <Header marcas={dbStats.marcas} proveedores={dbStats.proveedores} saps={dbStats.saps} />
 
-      <main className="relative max-w-3xl mx-auto px-4 pt-20 pb-16">
+      <main className="relative max-w-4xl mx-auto px-5 pt-20 pb-20">
         {/* Welcome */}
         {recomendaciones.length === 0 && !cargando && (
-          <div className="mb-8 pt-6">
-            <h1 className="text-2xl font-bold text-white/90 mb-2 tracking-tight">
-              Asistente de <span className="gradient-text">Compras Vidal</span>
+          <div className="mb-10 pt-8">
+            <h1 className="text-3xl font-bold text-white/93 mb-3 tracking-tight leading-snug">
+              Asistente de <span className="gradient-text">Compras</span>
             </h1>
-            <p className="text-sm text-white/40 leading-relaxed max-w-lg">
-              Pega un aviso iOCC, describe los materiales o sube una foto. La IA aplica el algoritmo de 5 pasos sobre la base de datos de proveedores y te recomienda proveedor y código SAP para cada línea.
+            <p className="text-base text-white/45 leading-relaxed max-w-xl">
+              Escribe o pega aquí tu solicitud de compra. Te identifico el proveedor habitual, el código SAP y las alternativas para cada material.
             </p>
             {dbStats.saps > 0 && (
-              <p className="mt-3 text-xs text-emerald-400/60">
-                ✓ Base de datos lista — {dbStats.saps.toLocaleString('es-ES')} SAPs · {dbStats.marcas} marcas · {dbStats.proveedores} proveedores
+              <p className="mt-4 text-sm text-emerald-400/55 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/70 inline-block" />
+                Base de datos activa — {dbStats.saps.toLocaleString('es-ES')} referencias SAP · {dbStats.marcas} marcas · {dbStats.proveedores} proveedores
               </p>
             )}
           </div>
