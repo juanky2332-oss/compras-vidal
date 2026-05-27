@@ -20,7 +20,7 @@ export default function Header({ marcas, proveedores, saps }: HeaderProps) {
             <ShoppingCart className="w-4 h-4 text-white" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-base font-semibold text-white/92 tracking-tight">Compras Vidal</span>
+            <span className="text-base font-semibold text-white/92 tracking-tight">Ayudante de Compras</span>
             <span
               className="text-xs font-medium px-1.5 py-0.5 rounded-md"
               style={{ background: 'rgba(99,102,241,0.15)', color: 'rgba(165,180,252,0.8)' }}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Paperclip, X, Send, Loader2, ImageIcon, Sparkles } from 'lucide-react'
+import { Paperclip, X, Loader2, ImageIcon, Sparkles } from 'lucide-react'
 import Image from 'next/image'
 
 interface InputZoneProps {
@@ -63,27 +63,8 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
     }
   }
 
-  const ejemplos = [
-    '4 rodamientos SKF 6205-2RS',
-    'motorreductor Motovario 0,75 kW trifásico',
-    '2 contactores Schneider LC1D18 + guardamotor GV2ME10',
-    'banda transportadora Habasit FCB azul alimentaria 500mm',
-  ]
-
-  const usarEjemplo = (ej: string) => {
-    setTexto(ej)
-    setTimeout(() => {
-      const ta = textareaRef.current
-      if (ta) {
-        ta.style.height = 'auto'
-        ta.style.height = Math.min(ta.scrollHeight, 220) + 'px'
-        ta.focus()
-      }
-    }, 0)
-  }
-
   return (
-    <div className="space-y-4">
+    <div>
       {/* Card principal */}
       <div
         className="rounded-2xl overflow-hidden transition-all duration-300"
@@ -189,23 +170,6 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
         </div>
       </div>
 
-      {/* Ejemplos rápidos */}
-      <div className="space-y-2">
-        <p className="text-xs text-white/25 px-1 font-medium uppercase tracking-widest">Ejemplos</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {ejemplos.map((ej, i) => (
-            <button
-              key={i}
-              onClick={() => usarEjemplo(ej)}
-              disabled={cargando}
-              className="text-left text-sm text-white/40 hover:text-white/70 px-3.5 py-2.5 rounded-xl border border-white/06 hover:border-white/14 hover:bg-white/[0.025] transition-all disabled:opacity-30 truncate"
-              title={ej}
-            >
-              {ej}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }

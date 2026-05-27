@@ -23,22 +23,39 @@ export interface ResultadoAlgoritmo {
 // Equivalencias de proveedor: críticas, no negociables
 const EQUIV_CODIGO: Record<string, { codigo: string; nombre: string }> = {
   '100025296': { codigo: '100035845', nombre: 'BERDIN LEVANTE' },
+  '100025303': { codigo: '100034920', nombre: 'EFIX' }, // MATINOX → EFIX (proveedor en declive)
 }
 const EQUIV_NOMBRE_CONTIENE: Array<{ patron: string; codigo: string; nombre: string }> = [
   { patron: 'INOXIDABLES DE MOLINA', codigo: '100034920', nombre: 'EFIX' },
 ]
-const MATINOX_CODE = '100025303'
-const EFIX_CODE = '100034920'
-const EFIX_NOMBRE = 'EFIX'
 
-// Marcas con proveedor conocido pero no presentes en la tabla MARCAS_A_PROVEEDOR
-const MARCAS_OVERRIDE: Array<{ tokens: string[]; nombre: string; codigo: string; tipo: string; nota: string }> = [
+// Marcas/materiales con proveedor conocido — mayor prioridad que todo (checked first, in order)
+const MARCAS_OVERRIDE: Array<{
+  tokens: string[]
+  nombre: string
+  codigo: string
+  tipo: string
+  categoria: string
+  nota: string
+  sapKeywords: string[]
+}> = [
+  {
+    tokens: ['inox', 'inoxidable', 'acero inox', 'acero inoxidable'],
+    nombre: 'EFIX',
+    codigo: '100034920',
+    tipo: 'Material inoxidable / acero inox',
+    categoria: 'INOX / FONTANERÍA',
+    nota: 'EFIX (Inoxidables de Molina) — proveedor principal para todo material en acero inoxidable',
+    sapKeywords: ['inox', 'inoxidable'],
+  },
   {
     tokens: ['motovario', 'moto vario'],
     nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA',
     codigo: '100025256',
     tipo: 'Motorreductores / variadores Motovario',
+    categoria: 'MOTORES',
     nota: 'Proveedor habitual para equipos Motovario (motorreductores, variadores de velocidad)',
+    sapKeywords: ['motor', 'reductor', 'motovario'],
   },
 ]
 
@@ -95,6 +112,20 @@ function paso1Marca(descNorm: string, marcas: MarcaRow[]): { marcaRow: MarcaRow;
   return null
 }
 
+// Matching de keyword con protección contra falsos positivos en tokens cortos/numéricos.
+// Ej: "1/2" (paso de cadena) NO debe matchear dentro de "1 1/2" (diámetro de tubo).
+function kwMatch(kw: string, desc: string): boolean {
+  // Para keywords largos sin dígitos, el includes simple es seguro
+  if (kw.length >= 6 && !/[0-9]/.test(kw)) {
+    return desc.includes(kw)
+  }
+  // Para keywords cortos o numéricos: regex con lookbehind negativo.
+  // (?<![0-9] ) impide que "1/2" haga match si va precedido de "N " (número mixto tipo "1 1/2")
+  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(?<![0-9] )(?:^|[^a-z0-9])${escaped}(?:[^a-z0-9]|$)`)
+  return re.test(desc)
+}
+
 // PASO 2: Detectar TIPO DE MATERIAL por palabras clave en GUIA
 function paso2Guia(descNorm: string, guia: GuiaRow[]): GuiaRow | null {
   let mejorMatch: GuiaRow | null = null
@@ -104,7 +135,7 @@ function paso2Guia(descNorm: string, guia: GuiaRow[]): GuiaRow | null {
     const keywords = kwStr.split(',').map((k) => norm(k.trim())).filter((k) => k.length >= 2)
     let score = 0
     for (const kw of keywords) {
-      if (descNorm.includes(kw)) score++
+      if (kwMatch(kw, descNorm)) score++
     }
     if (score > mejorScore) {
       mejorScore = score
@@ -178,17 +209,23 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     }
   }
 
-  // PASO 0: Marcas hardcodeadas (override, mayor prioridad que MARCAS_A_PROVEEDOR)
+  // PASO 0: Overrides hardcodeados (máxima prioridad — material/marca con proveedor conocido)
   for (const override of MARCAS_OVERRIDE) {
     if (override.tokens.some((t) => descNorm.includes(t))) {
       pasoDeterminante = 1
       marcaDetectada = override.tokens[0].charAt(0).toUpperCase() + override.tokens[0].slice(1)
       tipoMaterial = override.tipo
-      categoria = 'MOTORES'
+      categoria = override.categoria
       principal = { nombre: override.nombre, codigo: override.codigo, nota: override.nota }
+      const sapKws = override.sapKeywords
+      const provNorm = norm(override.nombre.split(',')[0])
       sapsSugeridos = db.sapHistorico
-        .filter((s) => !esSapGenerico(s['Código SAP']) && norm(s['Nombre Proveedor PRINCIPAL']).includes('garcia'))
-        .filter((s) => norm(s['Descripción Material']).includes('motor') || norm(s['Descripción Material']).includes('reductor') || norm(s['Descripción Material']).includes('motovario'))
+        .filter((s) => !esSapGenerico(s['Código SAP']))
+        .filter((s) => {
+          const d = norm(s['Descripción Material'])
+          const p = norm(s['Nombre Proveedor PRINCIPAL'])
+          return sapKws.some((kw) => d.includes(kw)) || p.includes(provNorm)
+        })
         .sort((a, b) => Number(b['Veces Comprado']) - Number(a['Veces Comprado']))
         .slice(0, 3)
         .map((s) => ({ codigo: s['Código SAP'], descripcion: s['Descripción Material'], proveedor: s['Nombre Proveedor PRINCIPAL'] }))
