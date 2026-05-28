@@ -6,6 +6,14 @@ export interface CandidatoProveedor {
   nota?: string
 }
 
+export interface SapSugerido {
+  codigo: string
+  descripcion: string
+  proveedor: string
+  aproximado?: boolean   // true si la medida NO coincide exactamente con lo pedido
+  notaMedida?: string    // p.ej. "medida pedida 15x15; SAP 20x20 — verificar"
+}
+
 export interface ResultadoAlgoritmo {
   pasoDeterminante: 1 | 2 | 3 | 4 | 5
   tipoMaterial: string
@@ -14,7 +22,7 @@ export interface ResultadoAlgoritmo {
   sapEnSolicitud: string
   principal: CandidatoProveedor | null
   alternativas: CandidatoProveedor[]
-  sapsSugeridos: Array<{ codigo: string; descripcion: string; proveedor: string }>
+  sapsSugeridos: SapSugerido[]
   candidatoCentralizar: boolean
   notasSap: string
   notasGuia: string
@@ -144,14 +152,16 @@ const MARCAS_OVERRIDE: Array<{
   },
 
   {
-    tokens: ['malla inox', 'mallas inox'],
+    tokens: ['malla inox', 'mallas inox', 'rejilla', 'electrosoldada', 'reja inox', 'malla electros'],
     nombre: 'MALLAS INOX CASTELLON',
     codigo: '100034393',
-    tipo: 'Mallas inox',
+    tipo: 'Mallas / rejillas inox',
     categoria: 'MATERIAL METÁLICO',
-    nota: 'Mallas Inox Castellón: proveedor directo para mallas y redes inox industriales.',
-    sapKeywords: ['malla', 'red inox', 'malla electros', 'malla inox'],
-    alternativas: [],
+    nota: 'Mallas Inox Castellón: proveedor directo para mallas, rejillas y redes inox industriales (electrosoldadas).',
+    sapKeywords: ['malla', 'rejilla', 'electrosoldada', 'red inox', 'malla inox'],
+    alternativas: [
+      { nombre: 'EFIX', codigo: '100034920', nota: 'Material inox general' },
+    ],
   },
 
   {
@@ -228,6 +238,7 @@ interface Medidas {
   mm: number[]         // diámetros / espesores en mm
   sch: string[]        // SCH-10, SCH-40
   dn: string[]         // DN50, NW50
+  seccion: number[]    // dimensiones de sección tipo AxBxC (15,15,1.5) ordenadas desc
 }
 
 // Convierte una fracción en pulgadas a número decimal: "1 1/2" -> 1.5, "1/4" -> 0.25
@@ -276,11 +287,21 @@ function extraerMedidas(texto: string): Medidas {
   const reDiam = /ø\s*(\d+(?:\.\d+)?)/g
   while ((m = reDiam.exec(t)) !== null) mm.push(Number(m[1]))
 
+  // Sección tipo AxB o AxBxC: "15x15x1.5", "60x40x2", "100x12"
+  const seccion: number[] = []
+  const reSec = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)(?:\s*[x×]\s*(\d+(?:\.\d+)?))?/g
+  while ((m = reSec.exec(t)) !== null) {
+    const nums = [m[1], m[2], m[3]].filter(Boolean).map(Number)
+    for (const n of nums) seccion.push(n)  // NO deduplicar: 15x15 tiene dos 15 legítimos
+  }
+  seccion.sort((a, b) => b - a) // mayor primero
+
   return {
     pulgadas: [...new Set(pulgadas)],
     mm: [...new Set(mm)],
     sch: [...new Set(sch)],
     dn: [...new Set(dn)],
+    seccion,
   }
 }
 
@@ -310,6 +331,14 @@ function medidasCompatibles(pedidas: Medidas, candidata: Medidas): boolean {
     const hay = pedidas.mm.some((x) => candidata.mm.some((y) => Math.abs(x - y) < 0.01))
     if (!hay) return false
   }
+  // Sección AxBxC: las DOS dimensiones mayores (sección principal) deben coincidir.
+  // Así 15x15x1.5 NO es compatible con 20x20x1.5 ni con 60x40x2 (espesor igual no basta).
+  if (pedidas.seccion.length >= 2 && candidata.seccion.length >= 2) {
+    const pA = pedidas.seccion[0], pB = pedidas.seccion[1]
+    const cA = candidata.seccion[0], cB = candidata.seccion[1]
+    const coincide = Math.abs(pA - cA) < 0.01 && Math.abs(pB - cB) < 0.01
+    if (!coincide) return false
+  }
   return true
 }
 
@@ -329,7 +358,8 @@ const RUIDO = new Set([
 // Sustantivos industriales relevantes que SIEMPRE deben conservarse si aparecen.
 const SUSTANTIVOS_CLAVE = [
   'chapa', 'plancha', 'lamina', 'tubo', 'tuberia', 'codo', 'machon', 'puntera',
-  'brida', 'varilla', 'perfil', 'angulo', 'malla', 'valvula', 'racor', 'abrazadera',
+  'brida', 'varilla', 'perfil', 'angulo', 'malla', 'rejilla', 'valvula', 'racor', 'abrazadera',
+  'cuadrado', 'rectangular', 'redondo', 'electrosoldada',
   'rodamiento', 'cojinete', 'correa', 'banda', 'cadena', 'pinon', 'motor', 'reductor',
   'bomba', 'cilindro', 'sensor', 'cable', 'manguera', 'junta', 'reten', 'llave', 'vaso',
   'tornillo', 'tuerca', 'arandela', 'esparrago', 'inox', 'inoxidable', 'pvc',
@@ -396,7 +426,7 @@ const FAMILIAS_PIEZA: Array<{ familia: string; tokens: string[] }> = [
   { familia: 'chapa',     tokens: ['chapa', 'plancha', 'lamina'] },
   { familia: 'perfil',    tokens: ['perfil', 'angulo', 'pletina'] },
   { familia: 'valvula',   tokens: ['valvula', 'válvula'] },
-  { familia: 'malla',     tokens: ['malla'] },
+  { familia: 'malla',     tokens: ['malla', 'rejilla', 'electrosoldada', 'red inox'] },
   { familia: 'racor',     tokens: ['racor', 'abrazadera'] },
   { familia: 'tornilleria', tokens: ['tornillo', 'tuerca', 'arandela', 'esparrago', 'allen', 'd-933', 'd-912', 'd-934'] },
   { familia: 'llave',     tokens: ['llave de vaso', 'vaso', 'carraca', 'llave'] },
@@ -438,11 +468,22 @@ function extraerSAPDeSolicitud(descripcion: string): string {
   return m ? m[1] : ''
 }
 
+// Describe en texto la medida pedida y la del SAP, para la nota de "aproximado".
+function describirMedida(m: Medidas): string {
+  const partes: string[] = []
+  if (m.seccion.length >= 2) partes.push(m.seccion.join('x'))
+  if (m.pulgadas.length) partes.push(m.pulgadas.map((p) => `${parseFloat(p)}"`).join('/'))
+  if (m.sch.length) partes.push('SCH-' + m.sch.join('/'))
+  if (m.dn.length) partes.push('DN' + m.dn.join('/'))
+  if (m.mm.length && m.seccion.length < 2) partes.push(m.mm.join('x') + ' mm')
+  return partes.join(' ')
+}
+
 // ════════════════════════════════════════════════════════════════════════
-//  BÚSQUEDA SAP RELEVANTE (reescrita)
+//  BÚSQUEDA SAP RELEVANTE (dos pasadas: EXACTOS y, si faltan, APROXIMADOS)
 //  - usa tokens abreviados estilo comprador
-//  - aplica FILTRO DIMENSIONAL DURO (descarta medidas incompatibles)
-//  - scoring multi-token + bonus proveedor + frecuencia
+//  - exactos = misma medida; aproximados = misma familia, otra medida (marcados ~)
+//  - NUNCA deja un material sin candidato si existe algo de la misma familia
 // ════════════════════════════════════════════════════════════════════════
 function buscarSapsRelevantes(
   descNorm: string,
@@ -451,10 +492,9 @@ function buscarSapsRelevantes(
   extraKeywords: string[] = [],
   maxResults = 5,
   opciones: { aplicarFiltroMedidas?: boolean } = {}
-): Array<{ codigo: string; descripcion: string; proveedor: string }> {
+): SapSugerido[] {
   const aplicarFiltroMedidas = opciones.aplicarFiltroMedidas !== false
 
-  // Tokens abreviados (estilo comprador) + keywords del override/guía
   const baseTokens = tokensBusquedaSap(descNorm)
   const tokens = [...baseTokens, ...extraKeywords.map(norm)]
     .filter((t) => t && t.length >= 2)
@@ -463,52 +503,73 @@ function buscarSapsRelevantes(
   if (tokens.length === 0) return []
 
   const medidasPedidas = extraerMedidas(descNorm)
+  const descMedida = describirMedida(medidasPedidas)
   const haySolicitudConMedida =
     medidasPedidas.pulgadas.length > 0 ||
     medidasPedidas.sch.length > 0 ||
     medidasPedidas.dn.length > 0 ||
-    medidasPedidas.mm.length > 0
+    medidasPedidas.mm.length > 0 ||
+    medidasPedidas.seccion.length >= 2
 
   const familiaPedida = detectarFamilia(descNorm)
 
-  return sapHistorico
+  // Puntúa todos los candidatos de la MISMA familia con al menos 1 token de contenido.
+  const puntuados = sapHistorico
     .filter((s) => !esSapGenerico(s['Código SAP']))
     .filter((s) => {
-      // FILTRO POR TIPO DE PIEZA: no mezclar varilla/puntera con tubo, etc.
       if (familiaPedida) {
         const familiaCand = detectarFamilia(s['Descripción Material'])
         if (familiasIncompatibles(familiaPedida, familiaCand)) return false
       }
-      // FILTRO DIMENSIONAL DURO
-      if (!aplicarFiltroMedidas || !haySolicitudConMedida) return true
-      const medidasCand = extraerMedidas(s['Descripción Material'])
-      return medidasCompatibles(medidasPedidas, medidasCand)
+      return true
     })
     .map((s) => {
       const d = norm(s['Descripción Material'])
       const tokenMatches = tokens.filter((t) => d.includes(t)).length
       const provBonus = proveedorCodigo && s['Cód. Proveedor PRINCIPAL'] === proveedorCodigo ? 4 : 0
       const freq = Math.log(Number(s['Veces Comprado']) + 1)
-      // Bonus si coincide exactamente una medida pedida (refuerza el match dimensional correcto)
-      let medidaBonus = 0
-      if (haySolicitudConMedida) {
-        const mc = extraerMedidas(s['Descripción Material'])
-        const coincidePulg = medidasPedidas.pulgadas.some((p) => mc.pulgadas.includes(p))
-        const coincideMm = medidasPedidas.mm.some((x) => mc.mm.some((y) => Math.abs(x - y) < 0.01))
-        if (coincidePulg || coincideMm) medidaBonus = 6
-      }
-      return { sap: s, tokenMatches, score: tokenMatches * 10 + provBonus + freq + medidaBonus }
+      const medidasCand = extraerMedidas(s['Descripción Material'])
+      const exacto = !haySolicitudConMedida || !aplicarFiltroMedidas
+        ? true
+        : medidasCompatibles(medidasPedidas, medidasCand)
+      const medidaBonus = exacto && haySolicitudConMedida ? 8 : 0
+      return { sap: s, tokenMatches, exacto, medidasCand, score: tokenMatches * 10 + provBonus + freq + medidaBonus }
     })
-    // EXIGE al menos 1 token de contenido real: el bonus de proveedor o la frecuencia
-    // por sí solos NO pueden colar un SAP que no tiene nada que ver con lo pedido.
     .filter(({ tokenMatches }) => tokenMatches >= 1)
     .sort((a, b) => b.score - a.score)
-    .slice(0, maxResults)
-    .map(({ sap }) => ({
-      codigo: sap['Código SAP'],
-      descripcion: sap['Descripción Material'],
-      proveedor: sap['Nombre Proveedor PRINCIPAL'],
-    }))
+
+  const exactos = puntuados.filter((p) => p.exacto)
+  const aproximados = puntuados.filter((p) => !p.exacto)
+
+  const salida: SapSugerido[] = []
+
+  // 1) Exactos primero (sin marca)
+  for (const p of exactos.slice(0, maxResults)) {
+    salida.push({
+      codigo: p.sap['Código SAP'],
+      descripcion: p.sap['Descripción Material'],
+      proveedor: p.sap['Nombre Proveedor PRINCIPAL'],
+    })
+  }
+
+  // 2) Si no hay exactos (o faltan), rellena con aproximados MARCADOS
+  if (salida.length === 0) {
+    for (const p of aproximados.slice(0, maxResults)) {
+      const medCand = describirMedida(p.medidasCand)
+      const nota = haySolicitudConMedida && descMedida
+        ? `Medida no exacta: pedido ${descMedida}${medCand ? `, SAP ${medCand}` : ''}. Verificar/cambiar con proveedor.`
+        : 'Coincidencia aproximada — verificar con proveedor.'
+      salida.push({
+        codigo: p.sap['Código SAP'],
+        descripcion: p.sap['Descripción Material'],
+        proveedor: p.sap['Nombre Proveedor PRINCIPAL'],
+        aproximado: true,
+        notaMedida: nota,
+      })
+    }
+  }
+
+  return salida
 }
 
 // PASO 1: Detectar MARCA en MARCAS_A_PROVEEDOR
