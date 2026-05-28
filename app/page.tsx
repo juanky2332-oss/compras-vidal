@@ -5,7 +5,7 @@ import Header from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
-import type { RecomendacionNueva, Material } from '@/lib/types'
+import type { RecomendacionNueva, Material, ItemPedidoUnificado } from '@/lib/types'
 import {
   PackageSearch,
   AlertCircle,
@@ -36,6 +36,7 @@ export default function HomePage() {
   const [pasoActual, setPasoActual] = useState<Paso>(null)
   const [log, setLog] = useState<LogEntry[]>([])
   const [recomendaciones, setRecomendaciones] = useState<RecomendacionNueva[]>([])
+  const [pedidoUnificado, setPedidoUnificado] = useState<ItemPedidoUnificado[]>([])
   const [error, setError] = useState<string | null>(null)
   const [consultas, setConsultas] = useState<string[]>([])
 
@@ -58,6 +59,7 @@ export default function HomePage() {
       setError(null)
       setLog([])
       setRecomendaciones([])
+      setPedidoUnificado([])
       setPasoActual(null)
 
       try {
@@ -123,12 +125,16 @@ export default function HomePage() {
           seleccionado: true,
         }))
 
+        // Pedido unificado por proveedor (viene del nuevo motor)
+        const unificado: ItemPedidoUnificado[] = recData.pedidoUnificado || []
+
         const altos = recs.filter((r) => r.nivel_confianza === 'ALTO').length
         const medios = recs.filter((r) => r.nivel_confianza === 'MEDIO').length
         const bajos = recs.filter((r) => r.nivel_confianza === 'BAJO').length
         addLog('razonamiento', `ALTO: ${altos}  MEDIO: ${medios}  BAJO: ${bajos}`, true)
 
         setRecomendaciones(recs)
+        setPedidoUnificado(unificado)
         setConsultas((prev) => [consulta.slice(0, 80), ...prev].slice(0, 5))
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error desconocido'
@@ -150,6 +156,7 @@ export default function HomePage() {
 
   const handleReset = () => {
     setRecomendaciones([])
+    setPedidoUnificado([])
     setLog([])
     setError(null)
   }
@@ -160,28 +167,6 @@ export default function HomePage() {
     busqueda: { icon: PackageSearch, label: 'Consultando base de datos' },
     razonamiento: { icon: BrainCircuit, label: 'Analizando con IA' },
   }
-
-  // Map RecomendacionNueva to legacy Recomendacion shape for ExportSAP
-  const recsParaExport = recomendaciones.map((r) => ({
-    cantidad: r.cantidad,
-    material_detectado: r.material_detectado,
-    recomendacion_principal: {
-      proveedor: r.proveedor_recomendado?.nombre || '',
-      codigo_sap: r.codigos_sap_sugeridos?.[0]?.codigo || '',
-      sap_status: r.codigos_sap_sugeridos?.length > 0 ? 'confirmado' as const : 'ninguno' as const,
-      material_historico: r.codigos_sap_sugeridos?.[0]?.descripcion || '',
-      motivo: r.motivo || '',
-    },
-    alternativas: (r.alternativas || []).map((a) => ({
-      proveedor: a.nombre,
-      codigo_sap: a.codigo,
-      material_historico: '',
-      nota: a.nota || '',
-    })),
-    nivel_confianza: r.nivel_confianza,
-    observaciones: r.observaciones || '',
-    seleccionado: r.seleccionado,
-  }))
 
   return (
     <div className="min-h-screen bg-[#08080f]">
@@ -288,7 +273,7 @@ export default function HomePage() {
             ))}
 
             <div className="mt-6">
-              <ExportSAP recomendaciones={recsParaExport} />
+              <ExportSAP recomendaciones={recomendaciones} pedidoUnificado={pedidoUnificado} />
             </div>
           </div>
         )}
@@ -313,15 +298,6 @@ export default function HomePage() {
       </main>
     </div>
   )
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve((reader.result as string).split(',')[1])
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
 }
 
 // Comprime imagen antes de OCR para reducir payload
