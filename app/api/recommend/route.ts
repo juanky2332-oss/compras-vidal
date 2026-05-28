@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { loadDb } from '@/lib/dbLoader'
-import { ejecutarAlgoritmo } from '@/lib/algoritmo'
+import { ejecutarAlgoritmo, unificarPedido, type ItemPedido } from '@/lib/algoritmo'
 import type { Material } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -12,44 +12,79 @@ function getOpenAI() {
   return _openai
 }
 
+// ════════════════════════════════════════════════════════════════════════
+//  PASO PREVIO: la IA genera VARIANTES de búsqueda estilo SAP
+//  Igual que un comprador: primero entiende qué es el material y cómo puede
+//  estar codificado en SAP, y propone varias búsquedas abreviadas.
+//  Ej: "arillo de seguridad inox 25" -> ["ari seg 25","aro seg 25","anillo seg 25"]
+// ════════════════════════════════════════════════════════════════════════
+const PROMPT_VARIANTES = `Eres un comprador industrial experto en buscar materiales en SAP de Vidal Golosinas.
+En SAP las descripciones están ABREVIADAS y recortadas por longitud. Un mismo material puede estar
+codificado con sinónimos distintos (arillo / aro / anillo; tornillo / torn; válvula / val; etc.).
+
+Tu tarea: dada la descripción de un material, genera entre 3 y 6 BÚSQUEDAS ABREVIADAS como las
+teclearía un comprador en SAP para encontrarlo. Reglas:
+- Identifica primero QUÉ es el material realmente.
+- Abrevia como en SAP: pocas palabras, las clave + la medida principal (ej. "ari seg 25").
+- Incluye SINÓNIMOS de codificación probables (arillo→aro→anillo; junta→reten; manguera→tubo flexible...).
+- Conserva la medida principal (25, 15x15, 1", DN50...). Quita ruido (artículos, "de", unidades, aleación secundaria).
+- NO inventes referencias ni códigos. Solo términos de búsqueda.
+
+Devuelve SOLO un JSON: {"variantes": ["...", "...", "..."]}  (sin texto adicional)`
+
+async function generarVariantes(descripcion: string): Promise<string[]> {
+  try {
+    const resp = await getOpenAI().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: PROMPT_VARIANTES },
+        { role: 'user', content: `Material: "${descripcion}"` },
+      ],
+      response_format: { type: 'json_object' },
+      max_tokens: 200,
+      temperature: 0.2,
+    })
+    const content = resp.choices[0]?.message?.content || '{}'
+    const parsed = JSON.parse(content) as { variantes?: string[] }
+    const variantes = Array.isArray(parsed.variantes) ? parsed.variantes.filter((v) => typeof v === 'string' && v.trim()) : []
+    return variantes.slice(0, 6)
+  } catch {
+    return [] // si falla, el algoritmo usa solo la descripción normal
+  }
+}
+
 const SYSTEM_PROMPT = `Eres el asistente de compras industriales de Vidal Golosinas. El motor de 5 pasos ya ejecutó el algoritmo y te entrega los candidatos con el proveedor correcto y los SAPs más relevantes del histórico real (enero 2025 – mayo 2026, 6.368 SAPs, 244 proveedores). Tu tarea: generar la respuesta final en el formato exacto, siendo técnico, preciso y sin inventar nada.
 
-ANTES DE RESPONDER, RAZONA EN ESTE ORDEN (no lo escribas, solo úsalo):
-1) ¿QUÉ pieza es realmente? Identifica el TIPO de pieza (herramienta, tubo, puntera, varilla, chapa, válvula, racor...). No te dejes engañar por palabras sueltas: "vaso hexagonal" es una HERRAMIENTA (llave de vaso), NO tornillería; "hexagonal" aquí describe la herramienta, no un tornillo.
-2) ¿QUÉ MEDIDA pide? Detecta pulgadas, mm, Ø, SCH, DN. La medida es OBLIGATORIA para elegir el SAP.
-3) Elige SOLO SAPs cuyo tipo de pieza Y medida coincidan con lo pedido. El motor ya filtra medidas incompatibles; tú NO debes reintroducir un SAP de otra medida o de otro tipo de pieza.
+CÓMO FUNCIONA LA BÚSQUEDA (igual que un comprador en SAP):
+1) Identifica QUÉ pieza es realmente (no te dejes engañar por palabras sueltas).
+2) El motor ya ha buscado el material con varias abreviaturas/sinónimos (ari seg, aro seg, anillo seg...) y te da hasta 5 SAPs candidatos parecidos.
+3) Tu trabajo es DEVOLVER ESOS CANDIDATOS para que el usuario elija uno. NO elijas tú uno solo: presenta los que el motor encontró (hasta 5), del más parecido al menos.
 
-EQUIVALENCIAS DE PROVEEDOR (aplícalas en silencio, NO las expliques al usuario):
+EQUIVALENCIAS DE PROVEEDOR (aplícalas en silencio, NO las expliques):
 • 100025296 (BERDIN MURCIA) = 100035845 (BERDIN LEVANTE): usa 100035845.
-• 100034920 = EFIX. En SAP puede figurar como "Inoxidables de Molina", pero el proveedor es EFIX. Muestra siempre "EFIX". NUNCA escribas "cód. heredado", "Inox.Molina" ni aclaraciones de este tipo en la respuesta.
-• INGEIN → canalizar vía BYSS (100025290).
-• Equipos nuevos MARKEM → IPREMUR (100034742). Repuestos MARKEM → Murcia Codificación (100033915).
+• 100034920 = EFIX (en SAP puede figurar como "Inoxidables de Molina"; muestra siempre "EFIX"). NUNCA escribas "cód. heredado", "Inox.Molina" ni similar.
+• INGEIN → vía BYSS (100025290). Equipos nuevos MARKEM → IPREMUR (100034742); repuestos MARKEM → Murcia Codificación (100033915).
 
-LÓGICA INOX POR SUB-TIPO (para validar el proveedor correcto):
-• Tubo / codo / machón / puntera / varilla / perfil / brida inox de soldar (A-304, A-316, SCH-10) → EFIX (100034920); CIG (100025256) alternativa.
-• Chapa inox estándar/comercial → EFIX o CIG. Chapa inox a medida / corte láser / pliego especial → MAQUISUR (100031455).
-• Racores DIN 11851 / abrazaderas alimentarias inox → COREFLUID (100034026); EFIX alternativa.
-• Mallas inox → Mallas Inox Castellón (100034393).
-• Calderería inox / depósitos → CEDINOX (100034810).
-• Válvulas bola inox → Pontones Guillamón (100033923).
-• Válvulas HOFMA asiento inclinado → Contagas (100034263).
-
-OTRAS REGLAS DE NEGOCIO:
-• KARCHER: aunque ponga "manguera", el material marca KARCHER lo sirve CIG (100025256); Ferretería del Segura (100025134) alternativa.
-• Herramienta manual (vaso, llave, carraca, destornillador): CIG principal; Maq. y Herram. del Sureste / Ferretería del Segura alternativas. NUNCA clasificar como tornillería.
+LÓGICA INOX POR SUB-TIPO:
+• Tubo / codo / machón / puntera / varilla / perfil / brida inox de soldar → EFIX (100034920); CIG (100025256) alternativa.
+• Chapa inox estándar → EFIX o CIG. Chapa a medida / corte láser → MAQUISUR (100031455).
+• Racores DIN 11851 / abrazaderas alimentarias → COREFLUID (100034026); EFIX alt.
+• Mallas / rejillas inox → Mallas Inox Castellón (100034393).
+• Válvulas bola inox → Pontones Guillamón (100033923). Válvulas HOFMA → Contagas (100034263).
+• KARCHER (aunque ponga manguera) → CIG (100025256); Ferretería del Segura (100025134) alt.
+• Herramienta manual (vaso, llave, carraca) → CIG; nunca tornillería.
 
 REGLAS DURAS:
-- NUNCA inventes proveedor ni SAP. Si el motor no da match → indica "pedir aclaración al responsable".
-- SAP 599000000 → genérico, IGNÓRALO siempre.
-- Usa los saps_relacionados del motor. Elige 2-4, pero SOLO los que coincidan en tipo de pieza y medida con la solicitud. Si solo hay 1 que encaje, devuelve 1. Es preferible 1 SAP correcto que 3 con medidas distintas.
-- Si candidato_centralizar=true → añade en observaciones: "Candidato a centralizar".
-- En avería urgente → prioriza rapidez sobre precio e indícalo.
+- NUNCA inventes proveedor ni SAP. Si el motor no da match → "pedir aclaración al responsable".
+- SAP 599000000 → genérico, IGNÓRALO.
+- DEVUELVE TODOS los SAPs candidatos del motor (hasta 5) en codigos_sap_sugeridos, ordenados del más parecido al menos. El usuario elegirá uno.
+- Si un SAP viene marcado como aproximado (campo aproximado=true o con notaMedida), conserva esa nota en su campo "nota" para que el usuario sepa que debe verificar la medida.
+- Proveedor: devuelve el principal y la alternativa. El usuario confirmará con cuál se gestiona.
 - El motivo debe ser técnico y concreto: tipo real de pieza + medida + por qué ese proveedor.
 
 OBSERVACIONES — LIMPIAS Y OPERATIVAS:
-- Escribe SOLO lo útil para gestionar el pedido (medida a confirmar, alternativa de proveedor, urgencia, candidato a centralizar).
-- PROHIBIDO escribir: "proveedor en declive", "MATINOX en declive", "cód. heredado", "Inox.Molina", referencias a equivalencias internas, o cualquier explicación del funcionamiento interno.
-- Si no hay nada operativo que añadir, deja observaciones en cadena vacía "".
+- Solo lo útil para gestionar el pedido. PROHIBIDO: "proveedor en declive", "cód. heredado", "Inox.Molina", explicaciones internas.
+- Si no hay nada operativo, deja observaciones "".
 
 SALIDA JSON ESTRICTO (sin texto antes ni después):
 {
@@ -57,20 +92,24 @@ SALIDA JSON ESTRICTO (sin texto antes ni después):
   "marca_detectada": "string (o 'no especificada')",
   "proveedor_recomendado": { "nombre": "string", "codigo": "string" },
   "alternativas": [ { "nombre": "string", "codigo": "string", "nota": "string opcional" } ],
-  "codigos_sap_sugeridos": [ { "codigo": "string", "descripcion": "string", "proveedor": "string" } ],
+  "codigos_sap_sugeridos": [ { "codigo": "string", "descripcion": "string", "proveedor": "string", "nota": "string opcional (medida no exacta, verificar...)" } ],
   "nivel_confianza": "ALTO | MEDIO | BAJO",
-  "motivo": "string (breve y técnico: tipo real de pieza + medida + razón del proveedor)",
+  "motivo": "string (breve y técnico)",
   "observaciones": "string (solo operativo; vacío si no hay nada útil)"
 }`
+
+interface SapSugeridoOut { codigo: string; descripcion: string; proveedor: string; nota?: string; aproximado?: boolean }
 
 interface RecomendacionNueva {
   cantidad: number
   material_detectado: string
+  descripcion: string
+  categoria: string
   tipo_material: string
   marca_detectada: string
   proveedor_recomendado: { nombre: string; codigo: string }
   alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
-  codigos_sap_sugeridos: Array<{ codigo: string; descripcion: string; proveedor: string }>
+  codigos_sap_sugeridos: SapSugeridoOut[]
   nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
   motivo: string
   observaciones: string
@@ -78,7 +117,6 @@ interface RecomendacionNueva {
   _pasoDeterminante: number
 }
 
-// Limpia cualquier comentario interno que se cuele en proveedores/SAPs/observaciones.
 function limpiarTextoInterno(s: string): string {
   if (!s) return s
   return s
@@ -95,11 +133,17 @@ function limpiarTextoInterno(s: string): string {
 
 async function procesarMaterial(material: Material, index: number, total: number): Promise<RecomendacionNueva> {
   const db = loadDb()
-  const resultado = ejecutarAlgoritmo(material.descripcion, db)
+
+  // 1) La IA genera variantes de búsqueda estilo SAP
+  const variantes = await generarVariantes(material.descripcion)
+
+  // 2) El motor busca usando esas variantes
+  const resultado = ejecutarAlgoritmo(material.descripcion, db, variantes)
 
   const contextoAlgoritmo = {
     descripcion: material.descripcion,
     cantidad: material.cantidad,
+    variantes_busqueda: variantes,
     paso_determinante: resultado.pasoDeterminante,
     tipo_material_detectado: resultado.tipoMaterial,
     categoria: resultado.categoria,
@@ -107,7 +151,7 @@ async function procesarMaterial(material: Material, index: number, total: number
     sap_en_solicitud: resultado.sapEnSolicitud || null,
     proveedor_principal_sugerido: resultado.principal,
     alternativas_sugeridas: resultado.alternativas,
-    saps_relacionados: resultado.sapsSugeridos,
+    saps_relacionados: resultado.sapsSugeridos, // hasta 5, con flag aproximado y notaMedida
     candidato_centralizar: resultado.candidatoCentralizar,
     notas_sap: resultado.notasSap || null,
     notas_guia: resultado.notasGuia || null,
@@ -121,11 +165,11 @@ Resultado del motor (5 pasos):
 ${JSON.stringify(contextoAlgoritmo, null, 2)}
 
 INSTRUCCIONES:
-1. PRIMERO identifica el tipo REAL de pieza y la MEDIDA solicitada. No confundas herramientas con tornillería ni mezcles tipos de pieza.
-2. El proveedor_recomendado y alternativas ya están calculados por el motor — úsalos salvo que una regla de negocio del prompt de sistema exija corrección.
-3. Los saps_relacionados ya vienen filtrados por tipo de pieza y medida. Elige 2-4, descartando cualquiera cuya medida o tipo de pieza no coincida exactamente con la solicitud. Si solo uno encaja, devuelve uno.
-4. Observaciones: solo información operativa. PROHIBIDO mencionar proveedores en declive, códigos heredados o nombres internos del SAP.
-5. Genera la respuesta JSON final siguiendo el formato obligatorio.`
+1. Identifica el tipo REAL de pieza y la medida.
+2. DEVUELVE TODOS los saps_relacionados (hasta 5) en codigos_sap_sugeridos, del más parecido al menos. El usuario elegirá uno; no descartes candidatos tú.
+3. Si un SAP trae notaMedida o aproximado=true, copia esa nota en su campo "nota".
+4. Proveedor principal + alternativa; el usuario confirmará cuál.
+5. Observaciones solo operativas. Genera el JSON final.`
 
   const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
@@ -134,7 +178,7 @@ INSTRUCCIONES:
       { role: 'user', content: userMsg },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: 800,
+    max_tokens: 900,
     temperature: 0.05,
   })
 
@@ -146,7 +190,6 @@ INSTRUCCIONES:
     parsed = {}
   }
 
-  // Saneado final: aplica equivalencia EFIX/Inox.Molina visible y limpia textos internos.
   const provBase = (parsed.proveedor_recomendado as { nombre: string; codigo: string }) || resultado.principal || { nombre: 'Sin datos', codigo: '' }
   const proveedorLimpio = {
     nombre: limpiarTextoInterno(String(provBase?.nombre ?? '')) || 'Sin datos',
@@ -160,16 +203,26 @@ INSTRUCCIONES:
     nota: a.nota ? limpiarTextoInterno(String(a.nota)) || undefined : undefined,
   }))
 
-  const sapsBase = (parsed.codigos_sap_sugeridos as Array<{ codigo: string; descripcion: string; proveedor: string }>) || resultado.sapsSugeridos || []
-  const sapsLimpios = sapsBase.map((s) => ({
-    codigo: String(s.codigo ?? ''),
-    descripcion: String(s.descripcion ?? ''),
-    proveedor: limpiarTextoInterno(String(s.proveedor ?? '')),
-  }))
+  // SAPs: preferimos los del motor (llevan flags), enriquecidos con la nota del modelo si la hay.
+  const sapsMotor = resultado.sapsSugeridos || []
+  const sapsModelo = (parsed.codigos_sap_sugeridos as SapSugeridoOut[]) || []
+  const sapsLimpios: SapSugeridoOut[] = (sapsMotor.length ? sapsMotor : sapsModelo).map((s) => {
+    const notaModelo = sapsModelo.find((m) => m.codigo === s.codigo)?.nota
+    const nota = (s as { notaMedida?: string }).notaMedida || notaModelo
+    return {
+      codigo: String(s.codigo ?? ''),
+      descripcion: String(s.descripcion ?? ''),
+      proveedor: limpiarTextoInterno(String(s.proveedor ?? '')),
+      aproximado: (s as { aproximado?: boolean }).aproximado === true,
+      nota: nota ? limpiarTextoInterno(String(nota)) || undefined : undefined,
+    }
+  })
 
   return {
     cantidad: material.cantidad,
     material_detectado: `${material.cantidad}x ${material.descripcion}`,
+    descripcion: material.descripcion,
+    categoria: resultado.categoria || '',
     tipo_material: limpiarTextoInterno(String(parsed.tipo_material || resultado.tipoMaterial || 'No clasificado')),
     marca_detectada: String(parsed.marca_detectada || resultado.marcaDetectada || 'no especificada'),
     proveedor_recomendado: proveedorLimpio,
@@ -188,14 +241,38 @@ export async function POST(req: NextRequest) {
     const { materiales }: { materiales: Material[] } = await req.json()
 
     if (!materiales?.length) {
-      return NextResponse.json({ recomendaciones: [] })
+      return NextResponse.json({ recomendaciones: [], pedidoUnificado: [] })
     }
 
     const recomendaciones = await Promise.all(
       materiales.map((m, i) => procesarMaterial(m, i, materiales.length))
     )
 
-    return NextResponse.json({ recomendaciones })
+    // UNIFICACIÓN DE PEDIDO POR PROVEEDOR (mismo tipo de material → un solo proveedor)
+    const items: ItemPedido[] = recomendaciones.map((r) => ({
+      descripcion: r.descripcion,
+      cantidad: r.cantidad,
+      categoria: r.categoria,
+      proveedorOriginal: r.proveedor_recomendado?.codigo
+        ? { nombre: r.proveedor_recomendado.nombre, codigo: r.proveedor_recomendado.codigo }
+        : null,
+      proveedorAsignado: null,
+      unificado: false,
+      sapsSugeridos: r.codigos_sap_sugeridos,
+    }))
+    const itemsUnificados = unificarPedido(items)
+
+    // Devolvemos las recomendaciones + el resultado de unificación por índice
+    const pedidoUnificado = itemsUnificados.map((it, i) => ({
+      indice: i,
+      descripcion: it.descripcion,
+      cantidad: it.cantidad,
+      proveedor_asignado: it.proveedorAsignado,
+      unificado: it.unificado,
+      nota_unificacion: it.notaUnificacion || null,
+    }))
+
+    return NextResponse.json({ recomendaciones, pedidoUnificado })
   } catch (error) {
     console.error('Recommend error:', error)
     return NextResponse.json({ error: 'Error en recomendación' }, { status: 500 })
