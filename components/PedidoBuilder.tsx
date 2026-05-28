@@ -216,6 +216,7 @@ function LineaPedido({
         <SelectorSap
           saps={saps}
           sapElegido={sel.sapElegido}
+          sapDescripcion={sel.sapDescripcion}
           onElegir={(codigo, descripcion, aproximado) =>
             onActualizar({ sapElegido: codigo, sapDescripcion: descripcion, sapAproximado: aproximado })
           }
@@ -236,10 +237,12 @@ function LineaPedido({
 function SelectorSap({
   saps,
   sapElegido,
+  sapDescripcion,
   onElegir,
 }: {
   saps: RecomendacionNueva['codigos_sap_sugeridos']
   sapElegido: string
+  sapDescripcion: string
   onElegir: (codigo: string, descripcion: string, aproximado: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -247,6 +250,8 @@ function SelectorSap({
   const [sapResultados, setSapResultados] = useState<SapSearchResult[]>([])
   const [buscando, setBuscando] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  // actual: SAP seleccionado si está en las sugerencias de la IA
+  // Si viene de búsqueda manual no estará en saps[], pero sapElegido y sapDescripcion lo tienen
   const actual = saps.find((s) => s.codigo === sapElegido)
 
   function buscarSAP(query: string) {
@@ -278,10 +283,17 @@ function SelectorSap({
         <Hash className="w-3.5 h-3.5 text-indigo-400/50 shrink-0" />
         <div className="flex-1 min-w-0">
           {actual ? (
+            // SAP de las sugerencias IA
             <>
               <span className="text-xs font-mono text-indigo-300/90">{actual.codigo}</span>
               {actual.aproximado && <span className="ml-1 text-[10px] text-amber-400/70">~</span>}
               <p className="text-[10px] text-white/35 truncate">{actual.descripcion}</p>
+            </>
+          ) : sapElegido ? (
+            // SAP elegido desde búsqueda manual (no está en saps[] pero sapDescripcion lo tiene)
+            <>
+              <span className="text-xs font-mono text-indigo-300/90">{sapElegido}</span>
+              {sapDescripcion && <p className="text-[10px] text-white/35 truncate">{sapDescripcion}</p>}
             </>
           ) : (
             <span className="text-xs text-white/40">Sin código (texto libre)</span>
@@ -322,8 +334,8 @@ function SelectorSap({
                 sapResultados.map((s) => (
                   <button
                     key={s.codigo}
-                    onClick={() => { onElegir(s.codigo, s.descripcion, false); setOpen(false) }}
-                    className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
+                    onMouseDown={(e) => { e.preventDefault(); onElegir(s.codigo, s.descripcion, false); setOpen(false); setBusqSAP(''); setSapResultados([]) }}
+                    className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-white/[0.06] active:bg-white/10 transition-colors"
                   >
                     {s.codigo === sapElegido
                       ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />

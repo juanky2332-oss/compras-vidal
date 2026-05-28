@@ -181,7 +181,7 @@ const MARCAS_OVERRIDE: Array<{
   },
 
   {
-    tokens: ['din 11851', 'din11851', 'din-11851', 'abrazadera inox', 'abrazadera alimentaria', 'racor alimentario'],
+    tokens: ['din 11851', 'din11851', 'din-11851', 'abrazadera inox', 'abrazadera alimentaria', 'racor alimentario', 'racor nw', 'abrazadera nw'],
     nombre: 'COREFLUID',
     codigo: '100034026',
     tipo: 'Racores DIN 11851 / Abrazaderas inox alimentario',
@@ -196,7 +196,7 @@ const MARCAS_OVERRIDE: Array<{
   // ── INOX GENÉRICO (fallback) ──
   // Punteras, varillas, perfiles, tubos, codos, machones, bridas inox de soldar.
   {
-    tokens: ['inox', 'inoxidable', 'acero inox', 'acero inoxidable', 'a-316', 'a-304', 'sch-10', 'sch-40', 'aisi 316', 'aisi 304', 'aisi316', 'aisi304'],
+    tokens: ['inox', 'inoxidable', 'acero inox', 'acero inoxidable', 'a-316', 'a-304', 'sch-10', 'sch-40', 'aisi 316', 'aisi 304', 'aisi316', 'aisi304', 'nw'],
     nombre: 'EFIX',
     codigo: '100034920',
     tipo: 'Material inoxidable / acero inox',
