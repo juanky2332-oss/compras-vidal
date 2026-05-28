@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import Header from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
+import PedidoBuilder, { construirSeleccionInicial } from '@/components/PedidoBuilder'
 import ExportSAP from '@/components/ExportSAP'
-import type { RecomendacionNueva, Material, ItemPedidoUnificado } from '@/lib/types'
+import type { RecomendacionNueva, Material, ItemPedidoUnificado, SeleccionPedido } from '@/lib/types'
 import {
   PackageSearch,
   AlertCircle,
@@ -36,7 +37,7 @@ export default function HomePage() {
   const [pasoActual, setPasoActual] = useState<Paso>(null)
   const [log, setLog] = useState<LogEntry[]>([])
   const [recomendaciones, setRecomendaciones] = useState<RecomendacionNueva[]>([])
-  const [pedidoUnificado, setPedidoUnificado] = useState<ItemPedidoUnificado[]>([])
+  const [selecciones, setSelecciones] = useState<SeleccionPedido[]>([])
   const [error, setError] = useState<string | null>(null)
   const [consultas, setConsultas] = useState<string[]>([])
 
@@ -59,7 +60,7 @@ export default function HomePage() {
       setError(null)
       setLog([])
       setRecomendaciones([])
-      setPedidoUnificado([])
+      setSelecciones([])
       setPasoActual(null)
 
       try {
@@ -134,7 +135,7 @@ export default function HomePage() {
         addLog('razonamiento', `ALTO: ${altos}  MEDIO: ${medios}  BAJO: ${bajos}`, true)
 
         setRecomendaciones(recs)
-        setPedidoUnificado(unificado)
+        setSelecciones(construirSeleccionInicial(recs, unificado))
         setConsultas((prev) => [consulta.slice(0, 80), ...prev].slice(0, 5))
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error desconocido'
@@ -152,11 +153,15 @@ export default function HomePage() {
     setRecomendaciones((prev) =>
       prev.map((r, i) => (i === index ? { ...r, seleccionado: !r.seleccionado } : r))
     )
+    // Sincroniza con el panel de configuración del pedido
+    setSelecciones((prev) =>
+      prev.map((s) => (s.indice === index ? { ...s, incluido: !s.incluido } : s))
+    )
   }
 
   const handleReset = () => {
     setRecomendaciones([])
-    setPedidoUnificado([])
+    setSelecciones([])
     setLog([])
     setError(null)
   }
@@ -247,13 +252,19 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: true })))}
+                  onClick={() => {
+                    setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: true })))
+                    setSelecciones((prev) => prev.map((s) => ({ ...s, incluido: true })))
+                  }}
                   className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
                 >
                   Todos
                 </button>
                 <button
-                  onClick={() => setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: false })))}
+                  onClick={() => {
+                    setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: false })))
+                    setSelecciones((prev) => prev.map((s) => ({ ...s, incluido: false })))
+                  }}
                   className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
                 >
                   Ninguno
@@ -272,8 +283,18 @@ export default function HomePage() {
               <MaterialCard key={i} rec={rec} index={i} onToggle={handleToggle} />
             ))}
 
+            {/* Panel de configuración del pedido: elegir SAP y proveedor por línea */}
             <div className="mt-6">
-              <ExportSAP recomendaciones={recomendaciones} pedidoUnificado={pedidoUnificado} />
+              <PedidoBuilder
+                recomendaciones={recomendaciones}
+                selecciones={selecciones}
+                onChange={setSelecciones}
+              />
+            </div>
+
+            {/* Pedido final listo para copiar/pegar */}
+            <div className="mt-4">
+              <ExportSAP selecciones={selecciones} />
             </div>
           </div>
         )}
