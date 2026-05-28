@@ -133,4 +133,5 @@ export interface SapSearchResult {
   descripcion: string
   proveedor: string
   veces: number
+  fuente?: 'historico' | 'catalogo'  // catálogo = existe en SAP pero sin historial de compra
 }

@@ -1,4 +1,4 @@
-﻿import type { MarcaRow, GuiaRow, SapRow, ProveedorRow, DbData } from './dbLoader'
+﻿import type { MarcaRow, GuiaRow, SapRow, ProveedorRow, DbData, CatalogoSapRow } from './dbLoader'
 
 export interface CandidatoProveedor {
   nombre: string
@@ -731,6 +731,81 @@ function buscarSapsRelevantes(
   return salida
 }
 
+// ════════════════════════════════════════════════════════════════════════
+//  BÚSQUEDA EN CATÁLOGO SAP COMPLETO (fallback cuando el histórico no da
+//  suficientes resultados exactos).
+//  Usa la misma lógica de tokens/sinónimos/medidas pero sin datos de frecuencia.
+//  Resultados marcados con nota para que la UI los distinga.
+// ════════════════════════════════════════════════════════════════════════
+function buscarSapsEnCatalogo(
+  descNorm: string,
+  extraKeywords: string[],
+  catalogo: CatalogoSapRow[],
+  maxResults = 3
+): SapSugerido[] {
+  if (catalogo.length === 0) return []
+
+  const medidasPedidas = extraerMedidas(descNorm)
+  const { tokens: tokensEquiv } = tokensEquivalenciaMedidas(medidasPedidas)
+  const baseTokens = tokensBusquedaSap(descNorm)
+  const tokens = [...expandirConSinonimos(baseTokens), ...tokensEquiv, ...extraKeywords.map(norm)]
+    .filter((t) => t && t.length >= 2)
+    .filter((t, i, arr) => arr.indexOf(t) === i)
+
+  if (tokens.length === 0) return []
+
+  const familiaPedida = detectarFamilia(descNorm)
+
+  return catalogo
+    .filter((c) => !esSapGenerico(c.codigo))
+    .filter((c) => {
+      if (familiaPedida) {
+        const familiaCand = detectarFamilia(c.descripcion)
+        if (familiasIncompatibles(familiaPedida, familiaCand)) return false
+      }
+      return true
+    })
+    .map((c) => {
+      const d = norm(c.descripcion)
+      const matches = tokens.filter((t) => d.includes(t)).length
+      const medidasCand = extraerMedidas(c.descripcion)
+      const exacto = medidasCompatibles(medidasPedidas, medidasCand)
+      return { c, score: matches * 10 + (exacto ? 5 : 0) }
+    })
+    .filter(({ score }) => score >= 10)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults)
+    .map(({ c }) => ({
+      codigo: c.codigo,
+      descripcion: c.descripcion,
+      proveedor: '',
+      nota: 'Código activo en SAP — sin historial de compra',
+    }))
+}
+
+// Wrapper que llama a buscarSapsRelevantes (histórico) y, si obtiene < 2 exactos,
+// complementa con resultados del catálogo SAP completo.
+function buscarSAPsConFallback(
+  descNorm: string,
+  db: DbData,
+  proveedorCodigo?: string,
+  extraKeywords: string[] = [],
+  maxResults = 5,
+  opciones: { aplicarFiltroMedidas?: boolean; variantes?: string[] } = {}
+): SapSugerido[] {
+  const historico = buscarSapsRelevantes(descNorm, db.sapHistorico, proveedorCodigo, extraKeywords, maxResults, opciones)
+  const exactosHistorico = historico.filter((s) => !s.aproximado).length
+
+  if (exactosHistorico >= 2 || db.catalogo.length === 0) return historico
+
+  const codigosYa = new Set(historico.map((s) => s.codigo))
+  const faltantes = Math.max(1, 3 - exactosHistorico)
+  const delCatalogo = buscarSapsEnCatalogo(descNorm, extraKeywords, db.catalogo, faltantes)
+    .filter((s) => !codigosYa.has(s.codigo))
+
+  return [...historico, ...delCatalogo]
+}
+
 // PASO 1: Detectar MARCA en MARCAS_A_PROVEEDOR
 function paso1Marca(descNorm: string, marcas: MarcaRow[]): { marcaRow: MarcaRow; marcaDetectada: string } | null {
   for (const row of marcas) {
@@ -869,10 +944,10 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
         return { nombre: eq.nombre, codigo: eq.codigo, nota: a.nota }
       })
 
-      // SAPs con búsqueda abreviada + filtro dimensional (salvo herramientas tipo "del 13")
-      sapsSugeridos = buscarSapsRelevantes(
+      // SAPs: primero histórico, luego catálogo completo si faltan exactos
+      sapsSugeridos = buscarSAPsConFallback(
         descNorm,
-        db.sapHistorico,
+        db,
         override.codigo,
         override.sapKeywords,
         5,
@@ -926,7 +1001,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
       }
     }
 
-    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, provPrincipal.codigo, [norm(marcaDetectada)], 5, { variantes: variantesBusqueda })
+    sapsSugeridos = buscarSAPsConFallback(descNorm, db, provPrincipal.codigo, [norm(marcaDetectada)], 5, { variantes: variantesBusqueda })
 
     return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia, leyendaMedidas }
   }
@@ -953,7 +1028,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
     alternativas = alts
 
     const guiaKeywords = (guiaRow['Palabras clave de detección'] ?? '').split(',').map((k) => norm(k.trim())).filter((k) => k.length >= 3)
-    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, guiaKeywords, 5, { variantes: variantesBusqueda })
+    sapsSugeridos = buscarSAPsConFallback(descNorm, db, principal.codigo, guiaKeywords, 5, { variantes: variantesBusqueda })
 
     return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia, leyendaMedidas }
   }
@@ -968,7 +1043,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
     if (provsFallback.length > 0) {
       principal = normalizarProveedor(provsFallback[0]['Código Proveedor'], provsFallback[0]['Nombre Proveedor'])
       alternativas = provsFallback.slice(1).map((p) => normalizarProveedor(p['Código Proveedor'], p['Nombre Proveedor']))
-      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, [], 4, { variantes: variantesBusqueda })
+      sapsSugeridos = buscarSAPsConFallback(descNorm, db, principal.codigo, [], 4, { variantes: variantesBusqueda })
     }
   }
 
@@ -978,7 +1053,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
   if (!principal) {
     pasoDeterminante = 5
     if (sapsSugeridos.length === 0 && variantesBusqueda.length > 0) {
-      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, undefined, [], 5, { variantes: variantesBusqueda })
+      sapsSugeridos = buscarSAPsConFallback(descNorm, db, undefined, [], 5, { variantes: variantesBusqueda })
       // Si encontramos SAPs, derivamos un proveedor candidato del más frecuente
       if (sapsSugeridos.length > 0) {
         const provNombre = sapsSugeridos[0].proveedor

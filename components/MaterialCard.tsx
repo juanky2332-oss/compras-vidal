@@ -218,22 +218,35 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
                     )}
                   </div>
                   <div className="space-y-2">
-                    {rec.codigos_sap_sugeridos.slice(0, 4).map((sap, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-3 px-3.5 py-2 rounded-lg"
-                        style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.12)' }}
-                      >
-                        <Hash className="w-3.5 h-3.5 text-indigo-400/50 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <code className="text-sm text-indigo-300/85 font-mono font-medium">{sap.codigo}</code>
-                            <span className="text-xs text-white/38">{sap.proveedor}</span>
+                    {rec.codigos_sap_sugeridos.slice(0, 4).map((sap, i) => {
+                      const esCatalogo = !sap.proveedor && !!sap.nota?.includes('sin historial')
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-start gap-3 px-3.5 py-2 rounded-lg"
+                          style={{
+                            background: esCatalogo ? 'rgba(245,158,11,0.04)' : 'rgba(99,102,241,0.05)',
+                            border: `1px solid ${esCatalogo ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.12)'}`,
+                          }}
+                        >
+                          <Hash className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${esCatalogo ? 'text-amber-400/45' : 'text-indigo-400/50'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <code className={`text-sm font-mono font-medium ${esCatalogo ? 'text-amber-300/80' : 'text-indigo-300/85'}`}>{sap.codigo}</code>
+                              {esCatalogo
+                                ? <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase"
+                                    style={{ background: 'rgba(245,158,11,0.12)', color: 'rgba(251,191,36,0.7)', border: '1px solid rgba(245,158,11,0.2)' }}>SAP</span>
+                                : sap.proveedor && <span className="text-xs text-white/38">{sap.proveedor}</span>
+                              }
+                              {sap.aproximado && <span className="text-[10px] text-amber-400/60">~aprox.</span>}
+                            </div>
+                            <p className="text-xs text-white/28 italic mt-0.5 truncate">{sap.descripcion}</p>
+                            {esCatalogo && <p className="text-[9px] text-amber-400/40 mt-0.5">Sin historial de compra — existe en SAP</p>}
+                            {sap.nota && !esCatalogo && <p className="text-xs text-amber-400/50 mt-0.5 leading-tight">{sap.nota}</p>}
                           </div>
-                          <p className="text-xs text-white/28 italic mt-0.5 truncate">{sap.descripcion}</p>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

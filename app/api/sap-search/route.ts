@@ -101,19 +101,40 @@ export async function POST(req: NextRequest) {
 
   let results: SapSearchResult[]
 
+  const codigosHistorico = new Set<string>()
+
   if (isCodeSearch) {
     const codeQ = q.replace(/\s/g, '')
     results = db.sapHistorico
       .filter((s) => !s['Código SAP'].startsWith('59900'))
       .filter((s) => s['Código SAP'].includes(codeQ))
-      .map((s) => ({
-        codigo: s['Código SAP'],
-        descripcion: s['Descripción Material'],
-        proveedor: s['Nombre Proveedor PRINCIPAL'],
-        veces: Number(s['Veces Comprado']) || 0,
-      }))
+      .map((s) => {
+        codigosHistorico.add(s['Código SAP'])
+        return {
+          codigo: s['Código SAP'],
+          descripcion: s['Descripción Material'],
+          proveedor: s['Nombre Proveedor PRINCIPAL'],
+          veces: Number(s['Veces Comprado']) || 0,
+          fuente: 'historico' as const,
+        }
+      })
       .sort((a, b) => b.veces - a.veces)
-      .slice(0, 15)
+      .slice(0, 12)
+
+    // Complementar con catálogo para búsquedas de código
+    if (results.length < 8 && db.catalogo.length > 0) {
+      const delCat = db.catalogo
+        .filter((c) => c.codigo.includes(codeQ) && !codigosHistorico.has(c.codigo))
+        .slice(0, 8 - results.length)
+        .map((c) => ({
+          codigo: c.codigo,
+          descripcion: c.descripcion,
+          proveedor: '',
+          veces: 0,
+          fuente: 'catalogo' as const,
+        }))
+      results = [...results, ...delCat]
+    }
   } else {
     const baseTokens = q.split(/\s+/).filter((t) => t.length >= 2)
     const tokens = expandirMedidas(expandirSinonimos(baseTokens))
@@ -130,13 +151,40 @@ export async function POST(req: NextRequest) {
       })
       .filter(({ score }) => score >= 10)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 15)
-      .map(({ s }) => ({
-        codigo: s['Código SAP'],
-        descripcion: s['Descripción Material'],
-        proveedor: s['Nombre Proveedor PRINCIPAL'],
-        veces: Number(s['Veces Comprado']) || 0,
-      }))
+      .slice(0, 12)
+      .map(({ s }) => {
+        codigosHistorico.add(s['Código SAP'])
+        return {
+          codigo: s['Código SAP'],
+          descripcion: s['Descripción Material'],
+          proveedor: s['Nombre Proveedor PRINCIPAL'],
+          veces: Number(s['Veces Comprado']) || 0,
+          fuente: 'historico' as const,
+        }
+      })
+
+    // Complementar con catálogo si hay pocos resultados del histórico
+    if (results.length < 6 && db.catalogo.length > 0) {
+      const faltantes = 8 - results.length
+      const delCat = db.catalogo
+        .filter((c) => !c.codigo.startsWith('59900') && !codigosHistorico.has(c.codigo))
+        .map((c) => {
+          const d = norm(c.descripcion)
+          const matches = tokens.filter((t) => d.includes(t)).length
+          return { c, score: matches * 10 }
+        })
+        .filter(({ score }) => score >= 10)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, faltantes)
+        .map(({ c }) => ({
+          codigo: c.codigo,
+          descripcion: c.descripcion,
+          proveedor: '',
+          veces: 0,
+          fuente: 'catalogo' as const,
+        }))
+      results = [...results, ...delCat]
+    }
   }
 
   return NextResponse.json(results)

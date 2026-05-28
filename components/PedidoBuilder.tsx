@@ -342,11 +342,21 @@ function SelectorSap({
                       : <span className="w-3.5 shrink-0" />
                     }
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs font-mono text-indigo-300/90">{s.codigo}</span>
+                        {s.fuente === 'catalogo' && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide"
+                            style={{ background: 'rgba(245,158,11,0.12)', color: 'rgba(251,191,36,0.75)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                            SAP
+                          </span>
+                        )}
+                        {s.veces > 0 && (
+                          <span className="text-[9px] text-white/20">{s.veces}x</span>
+                        )}
                       </div>
                       <p className="text-[10px] text-white/55 leading-tight">{s.descripcion}</p>
-                      <p className="text-[10px] text-white/25">{s.proveedor}</p>
+                      {s.proveedor && <p className="text-[10px] text-white/25">{s.proveedor}</p>}
+                      {s.fuente === 'catalogo' && <p className="text-[9px] text-amber-400/40 italic">Sin historial de compra — existe en SAP</p>}
                     </div>
                   </button>
                 ))
