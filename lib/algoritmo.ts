@@ -30,7 +30,11 @@ const EQUIV_NOMBRE_CONTIENE: Array<{ patron: string; codigo: string; nombre: str
 ]
 
 // Overrides de marca/material con proveedor conocido.
-// ORDEN CRÍTICO: los más específicos van PRIMERO (inox sub-tipos antes del inox genérico).
+// ORDEN CRÍTICO: los más específicos van PRIMERO.
+//   1) HERRAMIENTAS (vaso, llave, carraca...) -> antes que tornillería/inox
+//   2) MARCAS específicas (genebre, hofma, inoxpa, karcher...)
+//   3) INOX sub-tipos (chapa, malla, calderería, din11851...)
+//   4) INOX genérico (fallback)
 const MARCAS_OVERRIDE: Array<{
   tokens: string[]
   nombre: string
@@ -40,10 +44,49 @@ const MARCAS_OVERRIDE: Array<{
   nota: string
   sapKeywords: string[]
   alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
+  // Si true, NO se aplica el filtro dimensional estricto (p.ej. herramientas medidas en "del 13")
+  ignorarFiltroMedidas?: boolean
 }> = [
-  // ── MARCAS con proveedor específico que pueden contener "inox" en la descripción ──
-  // (van ANTES del override genérico de inox para que no sean interceptadas)
+  // ────────────────────────────────────────────────────────────────────
+  // HERRAMIENTA MANUAL  (vaso, llave, carraca...) — PRIORIDAD MÁXIMA
+  // Evita que "vaso hexagonal del 13" caiga en tornillería/inox por la palabra "hexagonal".
+  // ────────────────────────────────────────────────────────────────────
+  {
+    tokens: [
+      'vaso hexagonal', 'vaso hex', 'llave de vaso', 'llave vaso', 'vaso de',
+      'carraca', 'trinquete', 'llave fija', 'llave allen', 'llave inglesa',
+      'destornillador', 'punta de vaso', 'juego de vasos', 'vaso impacto',
+    ],
+    nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA',
+    codigo: '100025256',
+    tipo: 'Herramienta manual (llave de vaso / vasos)',
+    categoria: 'HERRAMIENTA MANUAL',
+    nota: 'Llave de vaso / herramienta manual de mano. NO es tornillería.',
+    sapKeywords: ['llave de vaso', 'vaso', 'carraca', 'mm', 'pulgada'],
+    alternativas: [
+      { nombre: 'MAQ. Y HERRAM. DEL SURESTE', codigo: '100025249' },
+      { nombre: 'FERRETERIA DEL SEGURA', codigo: '100025134' },
+    ],
+    ignorarFiltroMedidas: true,
+  },
 
+  // ────────────────────────────────────────────────────────────────────
+  // KARCHER — aunque diga "manguera", lo llevan CIG / Ferretería del Segura
+  // ────────────────────────────────────────────────────────────────────
+  {
+    tokens: ['karcher', 'kärcher'],
+    nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA',
+    codigo: '100025256',
+    tipo: 'Material / accesorios KARCHER',
+    categoria: 'KARCHER',
+    nota: 'Material marca KARCHER (mangueras, accesorios, repuestos): proveedor habitual CIG; Ferretería del Segura como alternativa.',
+    sapKeywords: ['karcher', 'manguera', 'lanza', 'boquilla'],
+    alternativas: [
+      { nombre: 'FERRETERIA DEL SEGURA', codigo: '100025134' },
+    ],
+  },
+
+  // ── MARCAS con proveedor específico que pueden contener "inox" en la descripción ──
   {
     tokens: ['genebre', 'valvula bola'],
     nombre: 'PONTONES GUILLAMÓN,SL.',
@@ -53,7 +96,7 @@ const MARCAS_OVERRIDE: Array<{
     nota: 'PONTONES GUILLAMÓN: distribuidor principal GENEBRE. Válvulas bola inox, BSP, con o sin manómetro.',
     sapKeywords: ['valvula bola', 'val bola', 'genebre', 'bola inox'],
     alternativas: [
-      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'CIG: alternativa histórica válvulas bola inox' },
+      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'CIG: alternativa válvulas bola inox' },
     ],
   },
 
@@ -81,19 +124,22 @@ const MARCAS_OVERRIDE: Array<{
     alternativas: [],
   },
 
-  // ── INOX sub-tipos específicos (deben ir ANTES del override genérico de inox) ──
+  // ── INOX sub-tipos específicos (ANTES del override genérico de inox) ──
 
+  // Chapa inox: estándar la sirven proveedores de material inox (EFIX/CIG);
+  // sólo el corte láser / pliego a medida va a MAQUISUR.
   {
-    tokens: ['chapa inox', 'laser inox', 'plancha inox', 'corte inox', 'fabricar chapa inox', 'lamina inox'],
+    tokens: ['chapa inox', 'laser inox', 'plancha inox', 'corte inox', 'fabricar chapa inox', 'lamina inox', 'pliego chapa', 'pliego inox', 'chapa a medida'],
     nombre: 'MAQUISUR 1999, S.L.U.',
     codigo: '100031455',
     tipo: 'Chapa inox a medida / corte láser',
     categoria: 'MATERIAL METÁLICO',
-    nota: 'MAQUISUR: fabricación y corte de chapa inox a medida. Troquelajes Yagüés como alternativa para puertas y prelacada.',
-    sapKeywords: ['chapa inox', 'laser', 'plancha inox', 'lamina inox'],
+    nota: 'Chapa inox a medida / corte láser: MAQUISUR. Para chapa estándar comercial puede servirla también un proveedor de material inox (EFIX / CIG).',
+    sapKeywords: ['chapa inox', 'chapa', 'plancha inox', 'lamina inox'],
     alternativas: [
-      { nombre: 'TROQUELAJES YAGUES', codigo: '100034033', nota: 'Alternativa troquelaje y chapa prelacada/puertas Pirineo' },
-      { nombre: 'EFIX', codigo: '100034920', nota: 'Para accesorios soldar inox estándar (no chapa)' },
+      { nombre: 'EFIX', codigo: '100034920', nota: 'Chapa inox estándar / comercial' },
+      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'Chapa inox estándar / comercial' },
+      { nombre: 'TROQUELAJES YAGUES', codigo: '100034033', nota: 'Troquelaje y chapa prelacada / puertas' },
     ],
   },
 
@@ -117,8 +163,7 @@ const MARCAS_OVERRIDE: Array<{
     nota: 'CEDINOX: calderería especial inox, fabricación de depósitos y piezas a medida.',
     sapKeywords: ['calderia', 'deposito inox', 'cedinox', 'deposito acero'],
     alternativas: [
-      { nombre: 'EFIX', codigo: '100034920', nota: 'Para tubería y accesorios inox de conexión (no calderería)' },
-      { nombre: 'INOXIDABLES DE MOLINA (EFIX)', codigo: '100034920', nota: 'Mismo código SAP 100034920' },
+      { nombre: 'EFIX', codigo: '100034920', nota: 'Tubería y accesorios inox de conexión' },
     ],
   },
 
@@ -131,23 +176,22 @@ const MARCAS_OVERRIDE: Array<{
     nota: 'COREFLUID: especialista en racores DIN 11851 (macho, casquillo, tuerca) y abrazaderas alimentarias inox.',
     sapKeywords: ['din 11851', 'din11851', 'abrazadera inox', 'casquillo racor', 'macho racor', 'tuerca racor', 'nw'],
     alternativas: [
-      { nombre: 'EFIX', codigo: '100034920', nota: 'EFIX / Inoxidables de Molina: también suministra racores DIN11851 (históricamente MATINOX)' },
-      { nombre: 'MATINOX', codigo: '100025303', nota: 'MATINOX: histórico DIN11851 (proveedor en declive, preferir COREFLUID o EFIX)' },
+      { nombre: 'EFIX', codigo: '100034920', nota: 'También suministra racores DIN 11851' },
     ],
   },
 
-  // ── INOX GENÉRICO (fallback para todo lo que no encaje en los sub-tipos anteriores) ──
+  // ── INOX GENÉRICO (fallback) ──
+  // Punteras, varillas, perfiles, tubos, codos, machones, bridas inox de soldar.
   {
     tokens: ['inox', 'inoxidable', 'acero inox', 'acero inoxidable', 'a-316', 'a-304', 'sch-10', 'sch-40', 'aisi 316', 'aisi 304', 'aisi316', 'aisi304'],
     nombre: 'EFIX',
     codigo: '100034920',
     tipo: 'Material inoxidable / acero inox',
     categoria: 'INOX / FONTANERÍA',
-    nota: 'EFIX (Inoxidables de Molina, cód. SAP 100034920): proveedor principal para tubería inox, accesorios de soldar, perfiles y tornillería inox alimentaria. Sustituye a MATINOX (en declive).',
-    sapKeywords: ['inox', 'inoxidable', 'a-316', 'a-304', 'sch-10', 'aisi', 'tubo inox', 'codo inox', 'machon', 'puntera', 'brida inox'],
+    nota: 'EFIX: proveedor principal para tubería inox, accesorios de soldar, perfiles, punteras, varillas y tornillería inox alimentaria.',
+    sapKeywords: ['inox', 'inoxidable', 'a-316', 'a-304', 'sch-10', 'aisi'],
     alternativas: [
-      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'CIG: válvulas, perfiles y accesorios inox generales' },
-      { nombre: 'MATINOX', codigo: '100025303', nota: 'MATINOX: históricamente activo (en declive, preferir EFIX para nuevos pedidos)' },
+      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'Válvulas, perfiles y accesorios inox generales' },
     ],
   },
 
@@ -168,10 +212,208 @@ function norm(s: string): string {
   return (s ?? '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9\s\/\-\.]/g, ' ')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s\/\-\.\"]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  NUEVO: EXTRACCIÓN Y COMPARACIÓN DE MEDIDAS
+//  Resuelve PROBLEMA 2 (1" no puede devolver 1 1/2" ni 1/4")
+// ════════════════════════════════════════════════════════════════════════
+
+interface Medidas {
+  pulgadas: string[]   // p.ej. ["1", "1 1/2", "1/4"] normalizadas
+  mm: number[]         // diámetros / espesores en mm
+  sch: string[]        // SCH-10, SCH-40
+  dn: string[]         // DN50, NW50
+}
+
+// Convierte una fracción en pulgadas a número decimal: "1 1/2" -> 1.5, "1/4" -> 0.25
+function pulgadaADecimal(p: string): number {
+  const t = p.trim()
+  // mixto: "1 1/2"
+  const mixto = t.match(/^(\d+)\s+(\d+)\/(\d+)$/)
+  if (mixto) return Number(mixto[1]) + Number(mixto[2]) / Number(mixto[3])
+  // fracción simple: "1/2"
+  const frac = t.match(/^(\d+)\/(\d+)$/)
+  if (frac) return Number(frac[1]) / Number(frac[2])
+  // entero o decimal: "1", "1.5"
+  const dec = t.match(/^(\d+(?:[\.,]\d+)?)$/)
+  if (dec) return Number(dec[1].replace(',', '.'))
+  return NaN
+}
+
+// Extrae medidas de un texto (ya normalizado o crudo).
+function extraerMedidas(texto: string): Medidas {
+  const original = (texto ?? '').toLowerCase().replace(',', '.')
+  const pulgadas: string[] = []
+  const mm: number[] = []
+  const sch: string[] = []
+  const dn: string[] = []
+
+  // SCH primero, y lo retiramos del texto para que su número no contamine las pulgadas
+  const reSch = /sch[\s\-]?(\d{1,3})/g
+  let m: RegExpExecArray | null
+  while ((m = reSch.exec(original)) !== null) sch.push(m[1])
+  const t = original.replace(/sch[\s\-]?\d{1,3}/g, ' ')
+
+  // Pulgadas: "1 1/2"", "1/4"", "1"", "3/8 pulg". Exige que no haya un dígito pegado a la izquierda.
+  const reInch = /(?<![\d.])(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*(?:"|''|pulg|pulgada|pulgadas|in\b)/g
+  while ((m = reInch.exec(t)) !== null) {
+    const dec = pulgadaADecimal(m[1].trim())
+    if (!isNaN(dec)) pulgadas.push(dec.toFixed(4))
+  }
+
+  // DN / NW
+  const reDn = /\b(?:dn|nw)[\s\-]?(\d{1,4})/g
+  while ((m = reDn.exec(t)) !== null) dn.push(m[1])
+
+  // mm: "d.28", "28x1 mm", "ø6mm", "espesor 1.5 mm"
+  const reMm = /(?:ø|o\.|d\.?\s*)?(\d+(?:\.\d+)?)\s*mm\b/g
+  while ((m = reMm.exec(t)) !== null) mm.push(Number(m[1]))
+  const reDiam = /ø\s*(\d+(?:\.\d+)?)/g
+  while ((m = reDiam.exec(t)) !== null) mm.push(Number(m[1]))
+
+  return {
+    pulgadas: [...new Set(pulgadas)],
+    mm: [...new Set(mm)],
+    sch: [...new Set(sch)],
+    dn: [...new Set(dn)],
+  }
+}
+
+// Devuelve true si las medidas del SAP candidato son COMPATIBLES con las pedidas.
+// Regla: si la solicitud especifica pulgadas y el candidato también especifica pulgadas,
+// alguna debe coincidir; si no coincide ninguna -> INCOMPATIBLE (descartar).
+// Igual para SCH y para diámetro mm principal. Si la solicitud no especifica una dimensión,
+// no se filtra por ella (no penaliza de más).
+function medidasCompatibles(pedidas: Medidas, candidata: Medidas): boolean {
+  // Pulgadas
+  if (pedidas.pulgadas.length > 0 && candidata.pulgadas.length > 0) {
+    const hayCoincidencia = pedidas.pulgadas.some((p) => candidata.pulgadas.includes(p))
+    if (!hayCoincidencia) return false
+  }
+  // SCH
+  if (pedidas.sch.length > 0 && candidata.sch.length > 0) {
+    const hay = pedidas.sch.some((s) => candidata.sch.includes(s))
+    if (!hay) return false
+  }
+  // DN / NW
+  if (pedidas.dn.length > 0 && candidata.dn.length > 0) {
+    const hay = pedidas.dn.some((d) => candidata.dn.includes(d))
+    if (!hay) return false
+  }
+  // mm: comparamos el conjunto; si pide mm concretos y el candidato tiene mm pero ninguno coincide -> fuera
+  if (pedidas.mm.length > 0 && candidata.mm.length > 0) {
+    const hay = pedidas.mm.some((x) => candidata.mm.some((y) => Math.abs(x - y) < 0.01))
+    if (!hay) return false
+  }
+  return true
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  NUEVO: BÚSQUEDA SAP "ESTILO COMPRADOR" (tokens abreviados)
+//  Resuelve PROBLEMA 1 y PROBLEMA 6
+//  De "chapa inox 2000x1000x1,5 inox 304" -> ["chapa","inox","2000","1000"]
+// ════════════════════════════════════════════════════════════════════════
+
+// Palabras de ruido que un comprador NO teclea al buscar en SAP.
+const RUIDO = new Set([
+  'de', 'del', 'la', 'el', 'los', 'las', 'para', 'con', 'sin', 'por', 'una', 'uno',
+  'unidad', 'unidades', 'ud', 'uds', 'pza', 'pzas', 'pieza', 'piezas',
+  'tipo', 'medida', 'medidas', 'aprox', 'ref', 'referencia', 'marca',
+])
+
+// Sustantivos industriales relevantes que SIEMPRE deben conservarse si aparecen.
+const SUSTANTIVOS_CLAVE = [
+  'chapa', 'plancha', 'lamina', 'tubo', 'tuberia', 'codo', 'machon', 'puntera',
+  'brida', 'varilla', 'perfil', 'angulo', 'malla', 'valvula', 'racor', 'abrazadera',
+  'rodamiento', 'cojinete', 'correa', 'banda', 'cadena', 'pinon', 'motor', 'reductor',
+  'bomba', 'cilindro', 'sensor', 'cable', 'manguera', 'junta', 'reten', 'llave', 'vaso',
+  'tornillo', 'tuerca', 'arandela', 'esparrago', 'inox', 'inoxidable', 'pvc',
+]
+
+// Genera los tokens de búsqueda abreviada al estilo de un comprador.
+// - conserva sustantivo(s) industrial(es) + "inox"
+// - conserva como mucho las 2 primeras dimensiones grandes (>=3 cifras: 2000, 1000)
+// - descarta espesores secundarios (1.5, 304 como sufijo de aleación si ya hay otra dim)
+// - quita ruido y unidades
+function tokensBusquedaSap(descNorm: string): string[] {
+  // separa medidas tipo 2000x1000x1.5 en tokens individuales,
+  // pero SOLO la "x" que está entre dígitos (para no romper "inox")
+  const limpio = descNorm
+    .replace(/(\d)\s*[x×]\s*(\d)/g, '$1 $2')
+    .replace(/[,]/g, '.')
+
+  const crudos = limpio.split(/\s+/).filter(Boolean)
+
+  const palabras: string[] = []
+  const numerosGrandes: string[] = []  // >=3 cifras (dimensiones principales: 2000,1000)
+  const numerosPeq: string[] = []      // 1-2 cifras (espesores, aleaciones)
+
+  for (const tk of crudos) {
+    if (RUIDO.has(tk)) continue
+    if (/^\d+(\.\d+)?$/.test(tk)) {
+      const entero = tk.split('.')[0]
+      if (entero.length >= 3) numerosGrandes.push(entero)
+      else numerosPeq.push(tk)
+      continue
+    }
+    if (tk.length >= 3) palabras.push(tk)
+  }
+
+  // Prioriza sustantivos clave + resto de palabras (sin duplicar)
+  const claves = palabras.filter((p) => SUSTANTIVOS_CLAVE.includes(p))
+  const otras = palabras.filter((p) => !SUSTANTIVOS_CLAVE.includes(p))
+
+  const tokens: string[] = []
+  for (const p of [...claves, ...otras]) if (!tokens.includes(p)) tokens.push(p)
+
+  // Añade como mucho 2 dimensiones grandes (las que un comprador teclea: 2000 1000)
+  for (const n of numerosGrandes.slice(0, 2)) if (!tokens.includes(n)) tokens.push(n)
+
+  // Si NO hay dimensiones grandes, deja entrar 1 número pequeño relevante (ej. "del 13")
+  if (numerosGrandes.length === 0 && numerosPeq.length > 0) {
+    const n = numerosPeq[0]
+    if (!tokens.includes(n)) tokens.push(n)
+  }
+
+  return tokens
+}
+
+// ── Filtro por TIPO DE PIEZA: una varilla/puntera no debe devolver tubos, etc.
+// Detecta el sustantivo principal de la pieza. Si la solicitud pide uno concreto,
+// se descartan candidatos cuyo sustantivo principal sea de OTRA familia incompatible.
+const FAMILIAS_PIEZA: Array<{ familia: string; tokens: string[] }> = [
+  { familia: 'tubo',      tokens: ['tubo', 'tuberia'] },
+  { familia: 'varilla',   tokens: ['varilla', 'redondo macizo', 'barra macizo'] },
+  { familia: 'puntera',   tokens: ['puntera'] },
+  { familia: 'codo',      tokens: ['codo'] },
+  { familia: 'brida',     tokens: ['brida'] },
+  { familia: 'machon',    tokens: ['machon', 'machón'] },
+  { familia: 'chapa',     tokens: ['chapa', 'plancha', 'lamina'] },
+  { familia: 'perfil',    tokens: ['perfil', 'angulo', 'pletina'] },
+  { familia: 'valvula',   tokens: ['valvula', 'válvula'] },
+  { familia: 'malla',     tokens: ['malla'] },
+  { familia: 'racor',     tokens: ['racor', 'abrazadera'] },
+  { familia: 'tornilleria', tokens: ['tornillo', 'tuerca', 'arandela', 'esparrago', 'allen', 'd-933', 'd-912', 'd-934'] },
+  { familia: 'llave',     tokens: ['llave de vaso', 'vaso', 'carraca', 'llave'] },
+]
+
+function detectarFamilia(texto: string): string | null {
+  const t = norm(texto)
+  for (const f of FAMILIAS_PIEZA) {
+    if (f.tokens.some((tk) => t.includes(tk))) return f.familia
+  }
+  return null
+}
+
+// Familias que NO deben mezclarse entre sí (cada una es excluyente del resto cuando se piden por nombre).
+function familiasIncompatibles(pedida: string | null, candidata: string | null): boolean {
+  if (!pedida || !candidata) return false
+  return pedida !== candidata
 }
 
 function aplicarEquivalencia(codigo: string, nombre: string): { codigo: string; nombre: string } {
@@ -196,30 +438,70 @@ function extraerSAPDeSolicitud(descripcion: string): string {
   return m ? m[1] : ''
 }
 
-// Busca SAPs relevantes usando scoring multi-token: cuantos tokens de la descripción aparecen
-// en el SAP + bonus por proveedor + frecuencia histórica. Mucho más preciso que keyword simple.
+// ════════════════════════════════════════════════════════════════════════
+//  BÚSQUEDA SAP RELEVANTE (reescrita)
+//  - usa tokens abreviados estilo comprador
+//  - aplica FILTRO DIMENSIONAL DURO (descarta medidas incompatibles)
+//  - scoring multi-token + bonus proveedor + frecuencia
+// ════════════════════════════════════════════════════════════════════════
 function buscarSapsRelevantes(
   descNorm: string,
   sapHistorico: SapRow[],
   proveedorCodigo?: string,
   extraKeywords: string[] = [],
-  maxResults = 5
+  maxResults = 5,
+  opciones: { aplicarFiltroMedidas?: boolean } = {}
 ): Array<{ codigo: string; descripcion: string; proveedor: string }> {
-  const tokens = [...descNorm.split(/\s+/).filter((t) => t.length >= 3), ...extraKeywords.map(norm)]
-    .filter((t, i, arr) => arr.indexOf(t) === i) // deduplica
+  const aplicarFiltroMedidas = opciones.aplicarFiltroMedidas !== false
+
+  // Tokens abreviados (estilo comprador) + keywords del override/guía
+  const baseTokens = tokensBusquedaSap(descNorm)
+  const tokens = [...baseTokens, ...extraKeywords.map(norm)]
+    .filter((t) => t && t.length >= 2)
+    .filter((t, i, arr) => arr.indexOf(t) === i)
 
   if (tokens.length === 0) return []
 
+  const medidasPedidas = extraerMedidas(descNorm)
+  const haySolicitudConMedida =
+    medidasPedidas.pulgadas.length > 0 ||
+    medidasPedidas.sch.length > 0 ||
+    medidasPedidas.dn.length > 0 ||
+    medidasPedidas.mm.length > 0
+
+  const familiaPedida = detectarFamilia(descNorm)
+
   return sapHistorico
     .filter((s) => !esSapGenerico(s['Código SAP']))
+    .filter((s) => {
+      // FILTRO POR TIPO DE PIEZA: no mezclar varilla/puntera con tubo, etc.
+      if (familiaPedida) {
+        const familiaCand = detectarFamilia(s['Descripción Material'])
+        if (familiasIncompatibles(familiaPedida, familiaCand)) return false
+      }
+      // FILTRO DIMENSIONAL DURO
+      if (!aplicarFiltroMedidas || !haySolicitudConMedida) return true
+      const medidasCand = extraerMedidas(s['Descripción Material'])
+      return medidasCompatibles(medidasPedidas, medidasCand)
+    })
     .map((s) => {
       const d = norm(s['Descripción Material'])
       const tokenMatches = tokens.filter((t) => d.includes(t)).length
       const provBonus = proveedorCodigo && s['Cód. Proveedor PRINCIPAL'] === proveedorCodigo ? 4 : 0
       const freq = Math.log(Number(s['Veces Comprado']) + 1)
-      return { sap: s, score: tokenMatches * 10 + provBonus + freq }
+      // Bonus si coincide exactamente una medida pedida (refuerza el match dimensional correcto)
+      let medidaBonus = 0
+      if (haySolicitudConMedida) {
+        const mc = extraerMedidas(s['Descripción Material'])
+        const coincidePulg = medidasPedidas.pulgadas.some((p) => mc.pulgadas.includes(p))
+        const coincideMm = medidasPedidas.mm.some((x) => mc.mm.some((y) => Math.abs(x - y) < 0.01))
+        if (coincidePulg || coincideMm) medidaBonus = 6
+      }
+      return { sap: s, tokenMatches, score: tokenMatches * 10 + provBonus + freq + medidaBonus }
     })
-    .filter(({ score }) => score >= 5) // al menos 1 token match (10 pts) o combinación relevante
+    // EXIGE al menos 1 token de contenido real: el bonus de proveedor o la frecuencia
+    // por sí solos NO pueden colar un SAP que no tiene nada que ver con lo pedido.
+    .filter(({ tokenMatches }) => tokenMatches >= 1)
     .sort((a, b) => b.score - a.score)
     .slice(0, maxResults)
     .map(({ sap }) => ({
@@ -340,7 +622,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     }
   }
 
-  // PASO 0: Overrides por material/marca con proveedor conocido (orden importa: específico → genérico)
+  // PASO 0: Overrides por material/marca (orden importa: herramienta → marca → inox sub-tipo → inox genérico)
   for (const override of MARCAS_OVERRIDE) {
     if (override.tokens.some((t) => descNorm.includes(t))) {
       pasoDeterminante = 1
@@ -349,14 +631,20 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
       categoria = override.categoria
       principal = { nombre: override.nombre, codigo: override.codigo, nota: override.nota }
 
-      // Alternativas hardcodeadas del override (aplicar equivalencias)
       alternativas = override.alternativas.map((a) => {
         const eq = aplicarEquivalencia(a.codigo, a.nombre)
         return { nombre: eq.nombre, codigo: eq.codigo, nota: a.nota }
       })
 
-      // SAPs con scoring multi-token: usa tokens de la descripción + keywords del override
-      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, override.codigo, override.sapKeywords, 5)
+      // SAPs con búsqueda abreviada + filtro dimensional (salvo herramientas tipo "del 13")
+      sapsSugeridos = buscarSapsRelevantes(
+        descNorm,
+        db.sapHistorico,
+        override.codigo,
+        override.sapKeywords,
+        5,
+        { aplicarFiltroMedidas: !override.ignorarFiltroMedidas }
+      )
 
       return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
     }
@@ -381,7 +669,6 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
       }
     }
 
-    // SAPs con scoring multi-token
     sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, provPrincipal.codigo, [norm(marcaDetectada)], 5)
 
     return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
@@ -408,7 +695,6 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     }
     alternativas = alts
 
-    // SAPs con scoring multi-token: usa la descripción del usuario + keywords de la guía
     const guiaKeywords = (guiaRow['Palabras clave de detección'] ?? '').split(',').map((k) => norm(k.trim())).filter((k) => k.length >= 3)
     sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, guiaKeywords, 5)
 
@@ -439,6 +725,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
 
 function inferirCategoria(descNorm: string): string {
   const mapaCategorias: Array<{ keywords: string[]; categoria: string }> = [
+    { keywords: ['vaso hexagonal', 'llave de vaso', 'carraca', 'destornillador', 'llave fija', 'llave allen'], categoria: 'HERRAMIENTA MANUAL' },
     { keywords: ['rodamiento', 'cojinete', 'bearing'], categoria: 'RODAMIENTOS' },
     { keywords: ['banda', 'correa transportadora', 'conveyor'], categoria: 'BANDAS TRANSPORTADORAS' },
     { keywords: ['motoreductor', 'motorreductor', 'reductor', 'motovario', 'motor electrico', 'motor trifasico'], categoria: 'MOTORES' },
