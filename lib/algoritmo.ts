@@ -54,6 +54,9 @@ const MARCAS_OVERRIDE: Array<{
   alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
   // Si true, NO se aplica el filtro dimensional estricto (p.ej. herramientas medidas en "del 13")
   ignorarFiltroMedidas?: boolean
+  // Si true (solo inox genérico), el proveedor principal se toma del SAP candidato más fuerte
+  // en vez de forzar el del override. Útil porque el inox lo sirven varios proveedores.
+  inferirProveedorDeSap?: boolean
 }> = [
   // ────────────────────────────────────────────────────────────────────
   // HERRAMIENTA MANUAL  (vaso, llave, carraca...) — PRIORIDAD MÁXIMA
@@ -203,6 +206,7 @@ const MARCAS_OVERRIDE: Array<{
     alternativas: [
       { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'Válvulas, perfiles y accesorios inox generales' },
     ],
+    inferirProveedorDeSap: true,
   },
 
   // ── Motovario (motorreductores) ──
@@ -418,6 +422,7 @@ function tokensBusquedaSap(descNorm: string): string[] {
 // se descartan candidatos cuyo sustantivo principal sea de OTRA familia incompatible.
 const FAMILIAS_PIEZA: Array<{ familia: string; tokens: string[] }> = [
   { familia: 'tubo',      tokens: ['tubo', 'tuberia'] },
+  { familia: 'anillo_seg', tokens: ['arillo', 'aro seg', 'anillo seg', 'aro de seg', 'anillo de seg', 'circlip', 'seeger'] },
   { familia: 'varilla',   tokens: ['varilla', 'redondo macizo', 'barra macizo'] },
   { familia: 'puntera',   tokens: ['puntera'] },
   { familia: 'codo',      tokens: ['codo'] },
@@ -481,7 +486,9 @@ function describirMedida(m: Medidas): string {
 
 // ════════════════════════════════════════════════════════════════════════
 //  BÚSQUEDA SAP RELEVANTE (dos pasadas: EXACTOS y, si faltan, APROXIMADOS)
-//  - usa tokens abreviados estilo comprador
+//  - usa tokens abreviados estilo comprador + VARIANTES generadas por la IA
+//    (ej. "ari seg 25", "aro seg 25", "anillo seg 25") para cubrir cómo está
+//    codificado el material en SAP (arillo / aro / anillo...)
 //  - exactos = misma medida; aproximados = misma familia, otra medida (marcados ~)
 //  - NUNCA deja un material sin candidato si existe algo de la misma familia
 // ════════════════════════════════════════════════════════════════════════
@@ -491,16 +498,24 @@ function buscarSapsRelevantes(
   proveedorCodigo?: string,
   extraKeywords: string[] = [],
   maxResults = 5,
-  opciones: { aplicarFiltroMedidas?: boolean } = {}
+  opciones: { aplicarFiltroMedidas?: boolean; variantes?: string[] } = {}
 ): SapSugerido[] {
   const aplicarFiltroMedidas = opciones.aplicarFiltroMedidas !== false
 
+  // Tokens base (de la descripción) + keywords del override/guía
   const baseTokens = tokensBusquedaSap(descNorm)
   const tokens = [...baseTokens, ...extraKeywords.map(norm)]
     .filter((t) => t && t.length >= 2)
     .filter((t, i, arr) => arr.indexOf(t) === i)
 
-  if (tokens.length === 0) return []
+  // VARIANTES IA: cada una es una "consulta SAP" tipo "ari seg 25".
+  // Convertimos cada variante en su propio set de tokens. Un SAP que case con
+  // CUALQUIER variante entera puntúa fuerte (es como teclearla en SAP).
+  const variantesTokens: string[][] = (opciones.variantes ?? [])
+    .map((v) => norm(v).split(/\s+/).filter((t) => t.length >= 2))
+    .filter((arr) => arr.length > 0)
+
+  if (tokens.length === 0 && variantesTokens.length === 0) return []
 
   const medidasPedidas = extraerMedidas(descNorm)
   const descMedida = describirMedida(medidasPedidas)
@@ -513,7 +528,6 @@ function buscarSapsRelevantes(
 
   const familiaPedida = detectarFamilia(descNorm)
 
-  // Puntúa todos los candidatos de la MISMA familia con al menos 1 token de contenido.
   const puntuados = sapHistorico
     .filter((s) => !esSapGenerico(s['Código SAP']))
     .filter((s) => {
@@ -526,6 +540,18 @@ function buscarSapsRelevantes(
     .map((s) => {
       const d = norm(s['Descripción Material'])
       const tokenMatches = tokens.filter((t) => d.includes(t)).length
+
+      // Coincidencia por variante: cuántos tokens de la variante están en el SAP.
+      // La MEJOR variante (la que más casa) define el bonus. Si una variante casa
+      // entera, es señal fortísima de que es el material correcto.
+      let mejorVariante = 0
+      for (const vt of variantesTokens) {
+        const hits = vt.filter((t) => d.includes(t)).length
+        const ratio = hits / vt.length
+        const puntos = hits * 8 + (ratio >= 0.99 ? 12 : 0) // variante completa => +12
+        if (puntos > mejorVariante) mejorVariante = puntos
+      }
+
       const provBonus = proveedorCodigo && s['Cód. Proveedor PRINCIPAL'] === proveedorCodigo ? 4 : 0
       const freq = Math.log(Number(s['Veces Comprado']) + 1)
       const medidasCand = extraerMedidas(s['Descripción Material'])
@@ -533,9 +559,13 @@ function buscarSapsRelevantes(
         ? true
         : medidasCompatibles(medidasPedidas, medidasCand)
       const medidaBonus = exacto && haySolicitudConMedida ? 8 : 0
-      return { sap: s, tokenMatches, exacto, medidasCand, score: tokenMatches * 10 + provBonus + freq + medidaBonus }
+
+      const score = tokenMatches * 10 + mejorVariante + provBonus + freq + medidaBonus
+      // Un SAP entra si casa por tokens de la descripción O por alguna variante IA.
+      const relevante = tokenMatches >= 1 || mejorVariante >= 8
+      return { sap: s, relevante, exacto, medidasCand, score }
     })
-    .filter(({ tokenMatches }) => tokenMatches >= 1)
+    .filter(({ relevante }) => relevante)
     .sort((a, b) => b.score - a.score)
 
   const exactos = puntuados.filter((p) => p.exacto)
@@ -553,8 +583,8 @@ function buscarSapsRelevantes(
   }
 
   // 2) Si no hay exactos (o faltan), rellena con aproximados MARCADOS
-  if (salida.length === 0) {
-    for (const p of aproximados.slice(0, maxResults)) {
+  if (salida.length < maxResults) {
+    for (const p of aproximados.slice(0, maxResults - salida.length)) {
       const medCand = describirMedida(p.medidasCand)
       const nota = haySolicitudConMedida && descMedida
         ? `Medida no exacta: pedido ${descMedida}${medCand ? `, SAP ${medCand}` : ''}. Verificar/cambiar con proveedor.`
@@ -635,7 +665,7 @@ function paso4Categoria(categoria: string, proveedores: ProveedorRow[]): Proveed
     .slice(0, 3)
 }
 
-export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlgoritmo {
+export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusqueda: string[] = []): ResultadoAlgoritmo {
   const descNorm = norm(descripcion)
   const sapEnSolicitud = extraerSAPDeSolicitud(descripcion)
 
@@ -645,7 +675,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
   let marcaDetectada = 'no especificada'
   let principal: CandidatoProveedor | null = null
   let alternativas: CandidatoProveedor[] = []
-  let sapsSugeridos: Array<{ codigo: string; descripcion: string; proveedor: string }> = []
+  let sapsSugeridos: SapSugerido[] = []
   let candidatoCentralizar = false
   let notasSap = ''
   let notasGuia = ''
@@ -704,8 +734,32 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
         override.codigo,
         override.sapKeywords,
         5,
-        { aplicarFiltroMedidas: !override.ignorarFiltroMedidas }
+        { aplicarFiltroMedidas: !override.ignorarFiltroMedidas, variantes: variantesBusqueda }
       )
+
+      // En inox genérico: si hay un SAP candidato EXACTO, el proveedor principal se toma
+      // de ese SAP (lo sirven varios proveedores). El override pasa a alternativa.
+      if (override.inferirProveedorDeSap && sapsSugeridos.length > 0) {
+        const primerExacto = sapsSugeridos.find((s) => !s.aproximado) || sapsSugeridos[0]
+        const provRow = db.proveedores.find((p) => norm(p['Nombre Proveedor']) === norm(primerExacto.proveedor))
+        let provInferido: CandidatoProveedor
+        if (provRow) {
+          provInferido = normalizarProveedor(provRow['Código Proveedor'], provRow['Nombre Proveedor'])
+        } else {
+          // No está en tabla proveedores: usamos nombre del SAP + equivalencia por nombre
+          const eq = aplicarEquivalencia('', primerExacto.proveedor)
+          provInferido = { codigo: eq.codigo, nombre: eq.nombre || primerExacto.proveedor }
+        }
+        if (provInferido.codigo && provInferido.codigo !== principal.codigo) {
+          // El override actual baja a alternativa (si no estaba ya)
+          if (!alternativas.some((a) => a.codigo === principal!.codigo)) {
+            alternativas = [{ nombre: principal.nombre, codigo: principal.codigo }, ...alternativas]
+          }
+          principal = provInferido
+        }
+        // Quitar de alternativas el que ahora es principal
+        alternativas = alternativas.filter((a) => a.codigo !== principal!.codigo)
+      }
 
       return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
     }
@@ -730,7 +784,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
       }
     }
 
-    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, provPrincipal.codigo, [norm(marcaDetectada)], 5)
+    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, provPrincipal.codigo, [norm(marcaDetectada)], 5, { variantes: variantesBusqueda })
 
     return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
   }
@@ -757,7 +811,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     alternativas = alts
 
     const guiaKeywords = (guiaRow['Palabras clave de detección'] ?? '').split(',').map((k) => norm(k.trim())).filter((k) => k.length >= 3)
-    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, guiaKeywords, 5)
+    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, guiaKeywords, 5, { variantes: variantesBusqueda })
 
     return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
   }
@@ -772,13 +826,27 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     if (provsFallback.length > 0) {
       principal = normalizarProveedor(provsFallback[0]['Código Proveedor'], provsFallback[0]['Nombre Proveedor'])
       alternativas = provsFallback.slice(1).map((p) => normalizarProveedor(p['Código Proveedor'], p['Nombre Proveedor']))
-      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, [], 4)
+      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, [], 4, { variantes: variantesBusqueda })
     }
   }
 
-  // PASO 5: Sin match — pedir aclaración
+  // PASO 5: Sin match de proveedor — pedir aclaración.
+  // Aun así, si la IA dio variantes, intentamos encontrar SAPs parecidos para
+  // que el usuario al menos tenga códigos candidatos que aceptar.
   if (!principal) {
     pasoDeterminante = 5
+    if (sapsSugeridos.length === 0 && variantesBusqueda.length > 0) {
+      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, undefined, [], 5, { variantes: variantesBusqueda })
+      // Si encontramos SAPs, derivamos un proveedor candidato del más frecuente
+      if (sapsSugeridos.length > 0) {
+        const provNombre = sapsSugeridos[0].proveedor
+        const provRow = db.proveedores.find((p) => norm(p['Nombre Proveedor']) === norm(provNombre))
+        if (provRow) {
+          principal = normalizarProveedor(provRow['Código Proveedor'], provRow['Nombre Proveedor'])
+          tipoMaterial = tipoMaterial === 'No clasificado' ? sapsSugeridos[0].descripcion : tipoMaterial
+        }
+      }
+    }
   }
 
   return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
@@ -811,4 +879,75 @@ function inferirCategoria(descNorm: string): string {
     }
   }
   return ''
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  UNIFICACIÓN DE PEDIDO POR PROVEEDOR
+//  Regla del negocio: si varios materiales son del MISMO tipo (categoría),
+//  se agrupan en un solo proveedor (el mayoritario para esa categoría) para
+//  no hacer 2 pedidos. El material movido se MARCA (unificado=true) con nota.
+// ════════════════════════════════════════════════════════════════════════
+export interface ItemPedido {
+  descripcion: string
+  cantidad: number
+  categoria: string
+  proveedorOriginal: CandidatoProveedor | null
+  proveedorAsignado: CandidatoProveedor | null
+  unificado: boolean          // true si se movió a otro proveedor para unificar
+  notaUnificacion?: string
+  sapsSugeridos?: Array<{ codigo: string; descripcion: string; proveedor: string; nota?: string; aproximado?: boolean }>
+}
+
+export function unificarPedido(items: ItemPedido[]): ItemPedido[] {
+  // Agrupa por categoría. Dentro de cada categoría, elige el proveedor con más
+  // líneas (mayoritario) y mueve el resto a él, marcándolos.
+  const porCategoria = new Map<string, ItemPedido[]>()
+  for (const it of items) {
+    const cat = norm(it.categoria || 'sin-categoria')
+    if (!porCategoria.has(cat)) porCategoria.set(cat, [])
+    porCategoria.get(cat)!.push(it)
+  }
+
+  for (const grupo of porCategoria.values()) {
+    if (grupo.length < 2) continue // nada que unificar
+
+    // Cuenta líneas por proveedor (usando el original)
+    const conteo = new Map<string, { prov: CandidatoProveedor; n: number }>()
+    for (const it of grupo) {
+      const p = it.proveedorOriginal
+      if (!p || !p.codigo) continue
+      const cur = conteo.get(p.codigo)
+      if (cur) cur.n++
+      else conteo.set(p.codigo, { prov: { nombre: p.nombre, codigo: p.codigo }, n: 1 })
+    }
+    if (conteo.size < 2) continue // todos ya van al mismo proveedor
+
+    // Proveedor mayoritario de la categoría
+    const mayoritario = [...conteo.values()].sort((a, b) => b.n - a.n)[0]
+    if (!mayoritario) continue
+
+    for (const it of grupo) {
+      const orig = it.proveedorOriginal
+      if (!orig || !orig.codigo) continue
+      if (orig.codigo === mayoritario.prov.codigo) {
+        it.proveedorAsignado = orig
+        it.unificado = false
+      } else {
+        // Movemos al mayoritario y marcamos
+        it.proveedorAsignado = { nombre: mayoritario.prov.nombre, codigo: mayoritario.prov.codigo }
+        it.unificado = true
+        it.notaUnificacion = `Se incluye en ${mayoritario.prov.nombre} para unificar pedido (histórico/principal: ${orig.nombre}). Confirmar que ${mayoritario.prov.nombre} puede servirlo.`
+      }
+    }
+  }
+
+  // Los que no se tocaron conservan su proveedor original como asignado
+  for (const it of items) {
+    if (!it.proveedorAsignado) {
+      it.proveedorAsignado = it.proveedorOriginal
+      it.unificado = false
+    }
+  }
+
+  return items
 }
