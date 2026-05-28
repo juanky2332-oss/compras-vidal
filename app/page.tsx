@@ -5,7 +5,7 @@ import Header from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
-import type { RecomendacionNueva, Material } from '@/lib/types'
+import type { RecomendacionNueva, Material, ProveedorSimple } from '@/lib/types'
 import {
   PackageSearch,
   AlertCircle,
@@ -32,6 +32,7 @@ interface DbStats {
 
 export default function HomePage() {
   const [dbStats, setDbStats] = useState<DbStats>({ marcas: 0, proveedores: 0, saps: 0 })
+  const [proveedoresDB, setProveedoresDB] = useState<ProveedorSimple[]>([])
   const [cargando, setCargando] = useState(false)
   const [pasoActual, setPasoActual] = useState<Paso>(null)
   const [log, setLog] = useState<LogEntry[]>([])
@@ -43,6 +44,10 @@ export default function HomePage() {
     fetch('/api/dbstats')
       .then((r) => r.json())
       .then((data) => setDbStats(data))
+      .catch(() => {})
+    fetch('/api/proveedores')
+      .then((r) => r.json())
+      .then((data) => setProveedoresDB(data))
       .catch(() => {})
   }, [])
 
@@ -145,6 +150,12 @@ export default function HomePage() {
   const handleToggle = (index: number) => {
     setRecomendaciones((prev) =>
       prev.map((r, i) => (i === index ? { ...r, seleccionado: !r.seleccionado } : r))
+    )
+  }
+
+  const handleUpdate = (index: number, updates: Partial<RecomendacionNueva>) => {
+    setRecomendaciones((prev) =>
+      prev.map((r, i) => (i === index ? { ...r, ...updates } : r))
     )
   }
 
@@ -284,7 +295,14 @@ export default function HomePage() {
             </div>
 
             {recomendaciones.map((rec, i) => (
-              <MaterialCard key={i} rec={rec} index={i} onToggle={handleToggle} />
+              <MaterialCard
+                key={i}
+                rec={rec}
+                index={i}
+                onToggle={handleToggle}
+                proveedoresDB={proveedoresDB}
+                onUpdate={(updates) => handleUpdate(i, updates)}
+              />
             ))}
 
             <div className="mt-6">

@@ -74,6 +74,18 @@ export interface Recomendacion {
   _pasoDeterminante?: number
 }
 
+export interface ProveedorSimple {
+  codigo: string
+  nombre: string
+}
+
+export interface SapSearchResult {
+  codigo: string
+  descripcion: string
+  proveedor: string
+  veces: number
+}
+
 // New unified recommendation type from /api/recommend
 export interface RecomendacionNueva {
   cantidad: number

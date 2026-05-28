@@ -196,8 +196,42 @@ function extraerSAPDeSolicitud(descripcion: string): string {
   return m ? m[1] : ''
 }
 
-// Busca SAPs relevantes usando scoring multi-token: cuantos tokens de la descripción aparecen
-// en el SAP + bonus por proveedor + frecuencia histórica. Mucho más preciso que keyword simple.
+// Sinónimos industriales para mejorar la búsqueda de SAPs
+const SINONIMOS_INDUSTRIALES: Record<string, string[]> = {
+  plantilla: ['pletina'],
+  pletina: ['plantilla'],
+  abrazadera: ['abraz'],
+  abraz: ['abrazadera'],
+  brazadera: ['abrazadera', 'abraz'],
+  inox: ['inoxidable'],
+  inoxidable: ['inox'],
+  galvanizado: ['galv'],
+  galv: ['galvanizado'],
+  tornillo: ['torn'],
+  tuerca: ['tuec'],
+  rodamiento: ['rodto', 'rdto'],
+  rodto: ['rodamiento'],
+  valvula: ['val', 'vlv'],
+  val: ['valvula'],
+  manguera: ['mangu'],
+  reductor: ['reduc'],
+  contactor: ['ctactor', 'ctac'],
+  electrovalvula: ['electroval'],
+}
+
+function expandirConSinonimos(tokens: string[]): string[] {
+  const result = [...tokens]
+  for (const t of tokens) {
+    const syns = SINONIMOS_INDUSTRIALES[t] ?? []
+    for (const s of syns) {
+      if (!result.includes(s)) result.push(s)
+    }
+  }
+  return result
+}
+
+// Busca SAPs relevantes. Tokens de la descripción del usuario tienen peso x15,
+// keywords extra del override tienen peso x3 (evita que keywords de tubo "ganen" a pletinas).
 function buscarSapsRelevantes(
   descNorm: string,
   sapHistorico: SapRow[],
@@ -205,21 +239,29 @@ function buscarSapsRelevantes(
   extraKeywords: string[] = [],
   maxResults = 5
 ): Array<{ codigo: string; descripcion: string; proveedor: string }> {
-  const tokens = [...descNorm.split(/\s+/).filter((t) => t.length >= 3), ...extraKeywords.map(norm)]
-    .filter((t, i, arr) => arr.indexOf(t) === i) // deduplica
+  const descBaseTokens = descNorm.split(/\s+/).filter((t) => t.length >= 3)
+  const descTokens = expandirConSinonimos(
+    descBaseTokens.filter((t, i, arr) => arr.indexOf(t) === i)
+  )
 
-  if (tokens.length === 0) return []
+  const extraTokens = extraKeywords
+    .map(norm)
+    .filter((k) => k.length >= 3 && !descTokens.includes(k))
+    .filter((t, i, arr) => arr.indexOf(t) === i)
+
+  if (descTokens.length === 0 && extraTokens.length === 0) return []
 
   return sapHistorico
     .filter((s) => !esSapGenerico(s['Código SAP']))
     .map((s) => {
       const d = norm(s['Descripción Material'])
-      const tokenMatches = tokens.filter((t) => d.includes(t)).length
+      const descMatches = descTokens.filter((t) => d.includes(t)).length
+      const extraMatches = extraTokens.filter((t) => d.includes(t)).length
       const provBonus = proveedorCodigo && s['Cód. Proveedor PRINCIPAL'] === proveedorCodigo ? 4 : 0
       const freq = Math.log(Number(s['Veces Comprado']) + 1)
-      return { sap: s, score: tokenMatches * 10 + provBonus + freq }
+      return { sap: s, score: descMatches * 15 + extraMatches * 3 + provBonus + freq }
     })
-    .filter(({ score }) => score >= 5) // al menos 1 token match (10 pts) o combinación relevante
+    .filter(({ score }) => score >= 15)
     .sort((a, b) => b.score - a.score)
     .slice(0, maxResults)
     .map(({ sap }) => ({
@@ -340,9 +382,17 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     }
   }
 
+  // Comprueba si un token (que puede ser multi-palabra) aparece en la descripción.
+  // Para multi-palabra: todos los sub-tokens deben estar presentes (no importa el orden/distancia).
+  function tokenEnDesc(token: string, desc: string): boolean {
+    const palabras = token.split(/\s+/).filter((w) => w.length >= 3)
+    if (palabras.length <= 1) return desc.includes(token)
+    return palabras.every((w) => desc.includes(w))
+  }
+
   // PASO 0: Overrides por material/marca con proveedor conocido (orden importa: específico → genérico)
   for (const override of MARCAS_OVERRIDE) {
-    if (override.tokens.some((t) => descNorm.includes(t))) {
+    if (override.tokens.some((t) => tokenEnDesc(t, descNorm))) {
       pasoDeterminante = 1
       marcaDetectada = override.tokens[0].charAt(0).toUpperCase() + override.tokens[0].slice(1)
       tipoMaterial = override.tipo
