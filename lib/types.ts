@@ -108,3 +108,16 @@ export interface ItemPedidoUnificado {
   unificado: boolean
   nota_unificacion: string | null
 }
+
+// Selección manual del usuario por cada material (panel PedidoBuilder).
+// Parte de los valores que dio la IA, pero el usuario puede cambiarlos.
+export interface SeleccionPedido {
+  indice: number              // índice del material en recomendaciones
+  incluido: boolean           // si va al pedido final
+  sapElegido: string          // código SAP 502... elegido (o '' = texto libre)
+  sapDescripcion: string      // descripción del SAP elegido (para mostrar)
+  sapAproximado: boolean      // si el SAP elegido era aproximado (~)
+  proveedorNombre: string     // proveedor elegido
+  proveedorCodigo: string     // código del proveedor elegido
+  cantidad: number
+}
