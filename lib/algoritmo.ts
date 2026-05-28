@@ -1,9 +1,17 @@
-import type { MarcaRow, GuiaRow, SapRow, ProveedorRow, DbData } from './dbLoader'
+﻿import type { MarcaRow, GuiaRow, SapRow, ProveedorRow, DbData } from './dbLoader'
 
 export interface CandidatoProveedor {
   nombre: string
   codigo: string
   nota?: string
+}
+
+export interface SapSugerido {
+  codigo: string
+  descripcion: string
+  proveedor: string
+  aproximado?: boolean   // true si la medida NO coincide exactamente con lo pedido
+  notaMedida?: string    // p.ej. "medida pedida 15x15; SAP 20x20 — verificar"
 }
 
 export interface ResultadoAlgoritmo {
@@ -14,7 +22,7 @@ export interface ResultadoAlgoritmo {
   sapEnSolicitud: string
   principal: CandidatoProveedor | null
   alternativas: CandidatoProveedor[]
-  sapsSugeridos: Array<{ codigo: string; descripcion: string; proveedor: string }>
+  sapsSugeridos: SapSugerido[]
   candidatoCentralizar: boolean
   notasSap: string
   notasGuia: string
@@ -30,7 +38,11 @@ const EQUIV_NOMBRE_CONTIENE: Array<{ patron: string; codigo: string; nombre: str
 ]
 
 // Overrides de marca/material con proveedor conocido.
-// ORDEN CRÍTICO: los más específicos van PRIMERO (inox sub-tipos antes del inox genérico).
+// ORDEN CRÍTICO: los más específicos van PRIMERO.
+//   1) HERRAMIENTAS (vaso, llave, carraca...) -> antes que tornillería/inox
+//   2) MARCAS específicas (genebre, hofma, inoxpa, karcher...)
+//   3) INOX sub-tipos (chapa, malla, calderería, din11851...)
+//   4) INOX genérico (fallback)
 const MARCAS_OVERRIDE: Array<{
   tokens: string[]
   nombre: string
@@ -40,10 +52,52 @@ const MARCAS_OVERRIDE: Array<{
   nota: string
   sapKeywords: string[]
   alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
+  // Si true, NO se aplica el filtro dimensional estricto (p.ej. herramientas medidas en "del 13")
+  ignorarFiltroMedidas?: boolean
+  // Si true (solo inox genérico), el proveedor principal se toma del SAP candidato más fuerte
+  // en vez de forzar el del override. Útil porque el inox lo sirven varios proveedores.
+  inferirProveedorDeSap?: boolean
 }> = [
-  // ── MARCAS con proveedor específico que pueden contener "inox" en la descripción ──
-  // (van ANTES del override genérico de inox para que no sean interceptadas)
+  // ────────────────────────────────────────────────────────────────────
+  // HERRAMIENTA MANUAL  (vaso, llave, carraca...) — PRIORIDAD MÁXIMA
+  // Evita que "vaso hexagonal del 13" caiga en tornillería/inox por la palabra "hexagonal".
+  // ────────────────────────────────────────────────────────────────────
+  {
+    tokens: [
+      'vaso hexagonal', 'vaso hex', 'llave de vaso', 'llave vaso', 'vaso de',
+      'carraca', 'trinquete', 'llave fija', 'llave allen', 'llave inglesa',
+      'destornillador', 'punta de vaso', 'juego de vasos', 'vaso impacto',
+    ],
+    nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA',
+    codigo: '100025256',
+    tipo: 'Herramienta manual (llave de vaso / vasos)',
+    categoria: 'HERRAMIENTA MANUAL',
+    nota: 'Llave de vaso / herramienta manual de mano. NO es tornillería.',
+    sapKeywords: ['llave de vaso', 'vaso', 'carraca', 'mm', 'pulgada'],
+    alternativas: [
+      { nombre: 'MAQ. Y HERRAM. DEL SURESTE', codigo: '100025249' },
+      { nombre: 'FERRETERIA DEL SEGURA', codigo: '100025134' },
+    ],
+    ignorarFiltroMedidas: true,
+  },
 
+  // ────────────────────────────────────────────────────────────────────
+  // KARCHER — aunque diga "manguera", lo llevan CIG / Ferretería del Segura
+  // ────────────────────────────────────────────────────────────────────
+  {
+    tokens: ['karcher', 'kärcher'],
+    nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA',
+    codigo: '100025256',
+    tipo: 'Material / accesorios KARCHER',
+    categoria: 'KARCHER',
+    nota: 'Material marca KARCHER (mangueras, accesorios, repuestos): proveedor habitual CIG; Ferretería del Segura como alternativa.',
+    sapKeywords: ['karcher', 'manguera', 'lanza', 'boquilla'],
+    alternativas: [
+      { nombre: 'FERRETERIA DEL SEGURA', codigo: '100025134' },
+    ],
+  },
+
+  // ── MARCAS con proveedor específico que pueden contener "inox" en la descripción ──
   {
     tokens: ['genebre', 'valvula bola'],
     nombre: 'PONTONES GUILLAMÓN,SL.',
@@ -53,7 +107,7 @@ const MARCAS_OVERRIDE: Array<{
     nota: 'PONTONES GUILLAMÓN: distribuidor principal GENEBRE. Válvulas bola inox, BSP, con o sin manómetro.',
     sapKeywords: ['valvula bola', 'val bola', 'genebre', 'bola inox'],
     alternativas: [
-      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'CIG: alternativa histórica válvulas bola inox' },
+      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'CIG: alternativa válvulas bola inox' },
     ],
   },
 
@@ -81,31 +135,36 @@ const MARCAS_OVERRIDE: Array<{
     alternativas: [],
   },
 
-  // ── INOX sub-tipos específicos (deben ir ANTES del override genérico de inox) ──
+  // ── INOX sub-tipos específicos (ANTES del override genérico de inox) ──
 
+  // Chapa inox: estándar la sirven proveedores de material inox (EFIX/CIG);
+  // sólo el corte láser / pliego a medida va a MAQUISUR.
   {
-    tokens: ['chapa inox', 'laser inox', 'plancha inox', 'corte inox', 'fabricar chapa inox', 'lamina inox'],
+    tokens: ['chapa inox', 'laser inox', 'plancha inox', 'corte inox', 'fabricar chapa inox', 'lamina inox', 'pliego chapa', 'pliego inox', 'chapa a medida'],
     nombre: 'MAQUISUR 1999, S.L.U.',
     codigo: '100031455',
     tipo: 'Chapa inox a medida / corte láser',
     categoria: 'MATERIAL METÁLICO',
-    nota: 'MAQUISUR: fabricación y corte de chapa inox a medida. Troquelajes Yagüés como alternativa para puertas y prelacada.',
-    sapKeywords: ['chapa inox', 'laser', 'plancha inox', 'lamina inox'],
+    nota: 'Chapa inox a medida / corte láser: MAQUISUR. Para chapa estándar comercial puede servirla también un proveedor de material inox (EFIX / CIG).',
+    sapKeywords: ['chapa inox', 'chapa', 'plancha inox', 'lamina inox'],
     alternativas: [
-      { nombre: 'TROQUELAJES YAGUES', codigo: '100034033', nota: 'Alternativa troquelaje y chapa prelacada/puertas Pirineo' },
-      { nombre: 'EFIX', codigo: '100034920', nota: 'Para accesorios soldar inox estándar (no chapa)' },
+      { nombre: 'EFIX', codigo: '100034920', nota: 'Chapa inox estándar / comercial' },
+      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'Chapa inox estándar / comercial' },
+      { nombre: 'TROQUELAJES YAGUES', codigo: '100034033', nota: 'Troquelaje y chapa prelacada / puertas' },
     ],
   },
 
   {
-    tokens: ['malla inox', 'mallas inox'],
+    tokens: ['malla inox', 'mallas inox', 'rejilla', 'electrosoldada', 'reja inox', 'malla electros'],
     nombre: 'MALLAS INOX CASTELLON',
     codigo: '100034393',
-    tipo: 'Mallas inox',
+    tipo: 'Mallas / rejillas inox',
     categoria: 'MATERIAL METÁLICO',
-    nota: 'Mallas Inox Castellón: proveedor directo para mallas y redes inox industriales.',
-    sapKeywords: ['malla', 'red inox', 'malla electros', 'malla inox'],
-    alternativas: [],
+    nota: 'Mallas Inox Castellón: proveedor directo para mallas, rejillas y redes inox industriales (electrosoldadas).',
+    sapKeywords: ['malla', 'rejilla', 'electrosoldada', 'red inox', 'malla inox'],
+    alternativas: [
+      { nombre: 'EFIX', codigo: '100034920', nota: 'Material inox general' },
+    ],
   },
 
   {
@@ -117,8 +176,7 @@ const MARCAS_OVERRIDE: Array<{
     nota: 'CEDINOX: calderería especial inox, fabricación de depósitos y piezas a medida.',
     sapKeywords: ['calderia', 'deposito inox', 'cedinox', 'deposito acero'],
     alternativas: [
-      { nombre: 'EFIX', codigo: '100034920', nota: 'Para tubería y accesorios inox de conexión (no calderería)' },
-      { nombre: 'INOXIDABLES DE MOLINA (EFIX)', codigo: '100034920', nota: 'Mismo código SAP 100034920' },
+      { nombre: 'EFIX', codigo: '100034920', nota: 'Tubería y accesorios inox de conexión' },
     ],
   },
 
@@ -131,24 +189,24 @@ const MARCAS_OVERRIDE: Array<{
     nota: 'COREFLUID: especialista en racores DIN 11851 (macho, casquillo, tuerca) y abrazaderas alimentarias inox.',
     sapKeywords: ['din 11851', 'din11851', 'abrazadera inox', 'casquillo racor', 'macho racor', 'tuerca racor', 'nw'],
     alternativas: [
-      { nombre: 'EFIX', codigo: '100034920', nota: 'EFIX / Inoxidables de Molina: también suministra racores DIN11851 (históricamente MATINOX)' },
-      { nombre: 'MATINOX', codigo: '100025303', nota: 'MATINOX: histórico DIN11851 (proveedor en declive, preferir COREFLUID o EFIX)' },
+      { nombre: 'EFIX', codigo: '100034920', nota: 'También suministra racores DIN 11851' },
     ],
   },
 
-  // ── INOX GENÉRICO (fallback para todo lo que no encaje en los sub-tipos anteriores) ──
+  // ── INOX GENÉRICO (fallback) ──
+  // Punteras, varillas, perfiles, tubos, codos, machones, bridas inox de soldar.
   {
     tokens: ['inox', 'inoxidable', 'acero inox', 'acero inoxidable', 'a-316', 'a-304', 'sch-10', 'sch-40', 'aisi 316', 'aisi 304', 'aisi316', 'aisi304'],
     nombre: 'EFIX',
     codigo: '100034920',
     tipo: 'Material inoxidable / acero inox',
     categoria: 'INOX / FONTANERÍA',
-    nota: 'EFIX (Inoxidables de Molina, cód. SAP 100034920): proveedor principal para tubería inox, accesorios de soldar, perfiles y tornillería inox alimentaria. Sustituye a MATINOX (en declive).',
-    sapKeywords: ['inox', 'inoxidable', 'a-316', 'a-304', 'sch-10', 'aisi', 'tubo inox', 'codo inox', 'machon', 'puntera', 'brida inox'],
+    nota: 'EFIX: proveedor principal para tubería inox, accesorios de soldar, perfiles, punteras, varillas y tornillería inox alimentaria.',
+    sapKeywords: ['inox', 'inoxidable', 'a-316', 'a-304', 'sch-10', 'aisi'],
     alternativas: [
-      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'CIG: válvulas, perfiles y accesorios inox generales' },
-      { nombre: 'MATINOX', codigo: '100025303', nota: 'MATINOX: históricamente activo (en declive, preferir EFIX para nuevos pedidos)' },
+      { nombre: 'COMERCIAL INDUSTRIAL GARCIA,SA', codigo: '100025256', nota: 'Válvulas, perfiles y accesorios inox generales' },
     ],
+    inferirProveedorDeSap: true,
   },
 
   // ── Motovario (motorreductores) ──
@@ -168,10 +226,263 @@ function norm(s: string): string {
   return (s ?? '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9\s\/\-\.]/g, ' ')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s\/\-\.\"]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  NUEVO: EXTRACCIÓN Y COMPARACIÓN DE MEDIDAS
+//  Resuelve PROBLEMA 2 (1" no puede devolver 1 1/2" ni 1/4")
+// ════════════════════════════════════════════════════════════════════════
+
+interface Medidas {
+  pulgadas: string[]   // p.ej. ["1", "1 1/2", "1/4"] normalizadas
+  mm: number[]         // diámetros / espesores en mm
+  sch: string[]        // SCH-10, SCH-40
+  dn: string[]         // DN50, NW50
+  seccion: number[]    // dimensiones de sección tipo AxBxC (15,15,1.5) ordenadas desc
+}
+
+// Convierte una fracción en pulgadas a número decimal: "1 1/2" -> 1.5, "1/4" -> 0.25
+function pulgadaADecimal(p: string): number {
+  const t = p.trim()
+  // mixto: "1 1/2"
+  const mixto = t.match(/^(\d+)\s+(\d+)\/(\d+)$/)
+  if (mixto) return Number(mixto[1]) + Number(mixto[2]) / Number(mixto[3])
+  // fracción simple: "1/2"
+  const frac = t.match(/^(\d+)\/(\d+)$/)
+  if (frac) return Number(frac[1]) / Number(frac[2])
+  // entero o decimal: "1", "1.5"
+  const dec = t.match(/^(\d+(?:[\.,]\d+)?)$/)
+  if (dec) return Number(dec[1].replace(',', '.'))
+  return NaN
+}
+
+// Extrae medidas de un texto (ya normalizado o crudo).
+function extraerMedidas(texto: string): Medidas {
+  const original = (texto ?? '').toLowerCase().replace(',', '.')
+  const pulgadas: string[] = []
+  const mm: number[] = []
+  const sch: string[] = []
+  const dn: string[] = []
+
+  // SCH primero, y lo retiramos del texto para que su número no contamine las pulgadas
+  const reSch = /sch[\s\-]?(\d{1,3})/g
+  let m: RegExpExecArray | null
+  while ((m = reSch.exec(original)) !== null) sch.push(m[1])
+  const t = original.replace(/sch[\s\-]?\d{1,3}/g, ' ')
+
+  // Pulgadas: "1 1/2"", "1/4"", "1"", "3/8 pulg". Exige que no haya un dígito pegado a la izquierda.
+  const reInch = /(?<![\d.])(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*(?:"|''|pulg|pulgada|pulgadas|in\b)/g
+  while ((m = reInch.exec(t)) !== null) {
+    const dec = pulgadaADecimal(m[1].trim())
+    if (!isNaN(dec)) pulgadas.push(dec.toFixed(4))
+  }
+
+  // DN / NW
+  const reDn = /\b(?:dn|nw)[\s\-]?(\d{1,4})/g
+  while ((m = reDn.exec(t)) !== null) dn.push(m[1])
+
+  // mm: "d.28", "28x1 mm", "ø6mm", "espesor 1.5 mm"
+  const reMm = /(?:ø|o\.|d\.?\s*)?(\d+(?:\.\d+)?)\s*mm\b/g
+  while ((m = reMm.exec(t)) !== null) mm.push(Number(m[1]))
+  const reDiam = /ø\s*(\d+(?:\.\d+)?)/g
+  while ((m = reDiam.exec(t)) !== null) mm.push(Number(m[1]))
+
+  // Sección tipo AxB o AxBxC: "15x15x1.5", "60x40x2", "100x12"
+  const seccion: number[] = []
+  const reSec = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)(?:\s*[x×]\s*(\d+(?:\.\d+)?))?/g
+  while ((m = reSec.exec(t)) !== null) {
+    const nums = [m[1], m[2], m[3]].filter(Boolean).map(Number)
+    for (const n of nums) seccion.push(n)  // NO deduplicar: 15x15 tiene dos 15 legítimos
+  }
+  seccion.sort((a, b) => b - a) // mayor primero
+
+  return {
+    pulgadas: [...new Set(pulgadas)],
+    mm: [...new Set(mm)],
+    sch: [...new Set(sch)],
+    dn: [...new Set(dn)],
+    seccion,
+  }
+}
+
+// Devuelve true si las medidas del SAP candidato son COMPATIBLES con las pedidas.
+// Regla: si la solicitud especifica pulgadas y el candidato también especifica pulgadas,
+// alguna debe coincidir; si no coincide ninguna -> INCOMPATIBLE (descartar).
+// Igual para SCH y para diámetro mm principal. Si la solicitud no especifica una dimensión,
+// no se filtra por ella (no penaliza de más).
+function medidasCompatibles(pedidas: Medidas, candidata: Medidas): boolean {
+  // Pulgadas
+  if (pedidas.pulgadas.length > 0 && candidata.pulgadas.length > 0) {
+    const hayCoincidencia = pedidas.pulgadas.some((p) => candidata.pulgadas.includes(p))
+    if (!hayCoincidencia) return false
+  }
+  // SCH
+  if (pedidas.sch.length > 0 && candidata.sch.length > 0) {
+    const hay = pedidas.sch.some((s) => candidata.sch.includes(s))
+    if (!hay) return false
+  }
+  // DN / NW
+  if (pedidas.dn.length > 0 && candidata.dn.length > 0) {
+    const hay = pedidas.dn.some((d) => candidata.dn.includes(d))
+    if (!hay) return false
+  }
+  // mm: comparamos el conjunto; si pide mm concretos y el candidato tiene mm pero ninguno coincide -> fuera
+  if (pedidas.mm.length > 0 && candidata.mm.length > 0) {
+    const hay = pedidas.mm.some((x) => candidata.mm.some((y) => Math.abs(x - y) < 0.01))
+    if (!hay) return false
+  }
+  // Sección AxBxC: las DOS dimensiones mayores (sección principal) deben coincidir.
+  // Así 15x15x1.5 NO es compatible con 20x20x1.5 ni con 60x40x2 (espesor igual no basta).
+  if (pedidas.seccion.length >= 2 && candidata.seccion.length >= 2) {
+    const pA = pedidas.seccion[0], pB = pedidas.seccion[1]
+    const cA = candidata.seccion[0], cB = candidata.seccion[1]
+    const coincide = Math.abs(pA - cA) < 0.01 && Math.abs(pB - cB) < 0.01
+    if (!coincide) return false
+  }
+  return true
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  NUEVO: BÚSQUEDA SAP "ESTILO COMPRADOR" (tokens abreviados)
+//  Resuelve PROBLEMA 1 y PROBLEMA 6
+//  De "chapa inox 2000x1000x1,5 inox 304" -> ["chapa","inox","2000","1000"]
+// ════════════════════════════════════════════════════════════════════════
+
+// Palabras de ruido que un comprador NO teclea al buscar en SAP.
+const RUIDO = new Set([
+  'de', 'del', 'la', 'el', 'los', 'las', 'para', 'con', 'sin', 'por', 'una', 'uno',
+  'unidad', 'unidades', 'ud', 'uds', 'pza', 'pzas', 'pieza', 'piezas',
+  'tipo', 'medida', 'medidas', 'aprox', 'ref', 'referencia', 'marca',
+])
+
+// Sustantivos industriales relevantes que SIEMPRE deben conservarse si aparecen.
+const SUSTANTIVOS_CLAVE = [
+  'chapa', 'plancha', 'lamina', 'tubo', 'tuberia', 'codo', 'machon', 'puntera',
+  'brida', 'varilla', 'perfil', 'angulo', 'pletina', 'plantilla', 'malla', 'rejilla',
+  'valvula', 'racor', 'abrazadera',
+  'cuadrado', 'rectangular', 'redondo', 'electrosoldada',
+  'rodamiento', 'cojinete', 'correa', 'banda', 'cadena', 'pinon', 'motor', 'reductor',
+  'bomba', 'cilindro', 'sensor', 'cable', 'manguera', 'junta', 'reten', 'llave', 'vaso',
+  'tornillo', 'tuerca', 'arandela', 'esparrago', 'inox', 'inoxidable', 'pvc',
+]
+
+// Sinónimos industriales: expande tokens del comprador a como aparecen en SAP.
+// Ej: "plantilla" → también busca "pletina" porque las SAPs usan esa abreviatura.
+const SINONIMOS_INDUSTRIALES: Record<string, string[]> = {
+  plantilla: ['pletina'],
+  pletina: ['plantilla'],
+  abrazadera: ['abraz'],
+  abraz: ['abrazadera'],
+  brazadera: ['abrazadera', 'abraz'],
+  inox: ['inoxidable'],
+  inoxidable: ['inox'],
+  galvanizado: ['galv'],
+  galv: ['galvanizado'],
+  tornillo: ['torn'],
+  tuerca: ['tuec'],
+  rodamiento: ['rodto', 'rdto'],
+  rodto: ['rodamiento'],
+  valvula: ['val', 'vlv'],
+  val: ['valvula'],
+  manguera: ['mangu'],
+  reductor: ['reduc'],
+}
+
+function expandirConSinonimos(tokens: string[]): string[] {
+  const result = [...tokens]
+  for (const t of tokens) {
+    const syns = SINONIMOS_INDUSTRIALES[t] ?? []
+    for (const s of syns) {
+      if (!result.includes(s)) result.push(s)
+    }
+  }
+  return result
+}
+
+// Genera los tokens de búsqueda abreviada al estilo de un comprador.
+// - conserva sustantivo(s) industrial(es) + "inox"
+// - conserva como mucho las 2 primeras dimensiones grandes (>=3 cifras: 2000, 1000)
+// - descarta espesores secundarios (1.5, 304 como sufijo de aleación si ya hay otra dim)
+// - quita ruido y unidades
+function tokensBusquedaSap(descNorm: string): string[] {
+  // separa medidas tipo 2000x1000x1.5 en tokens individuales,
+  // pero SOLO la "x" que está entre dígitos (para no romper "inox")
+  const limpio = descNorm
+    .replace(/(\d)\s*[x×]\s*(\d)/g, '$1 $2')
+    .replace(/[,]/g, '.')
+
+  const crudos = limpio.split(/\s+/).filter(Boolean)
+
+  const palabras: string[] = []
+  const numerosGrandes: string[] = []  // >=3 cifras (dimensiones principales: 2000,1000)
+  const numerosPeq: string[] = []      // 1-2 cifras (espesores, aleaciones)
+
+  for (const tk of crudos) {
+    if (RUIDO.has(tk)) continue
+    if (/^\d+(\.\d+)?$/.test(tk)) {
+      const entero = tk.split('.')[0]
+      if (entero.length >= 3) numerosGrandes.push(entero)
+      else numerosPeq.push(tk)
+      continue
+    }
+    if (tk.length >= 3) palabras.push(tk)
+  }
+
+  // Prioriza sustantivos clave + resto de palabras (sin duplicar)
+  const claves = palabras.filter((p) => SUSTANTIVOS_CLAVE.includes(p))
+  const otras = palabras.filter((p) => !SUSTANTIVOS_CLAVE.includes(p))
+
+  const tokens: string[] = []
+  for (const p of [...claves, ...otras]) if (!tokens.includes(p)) tokens.push(p)
+
+  // Añade como mucho 2 dimensiones grandes (las que un comprador teclea: 2000 1000)
+  for (const n of numerosGrandes.slice(0, 2)) if (!tokens.includes(n)) tokens.push(n)
+
+  // Si NO hay dimensiones grandes, deja entrar 1 número pequeño relevante (ej. "del 13")
+  if (numerosGrandes.length === 0 && numerosPeq.length > 0) {
+    const n = numerosPeq[0]
+    if (!tokens.includes(n)) tokens.push(n)
+  }
+
+  return tokens
+}
+
+// ── Filtro por TIPO DE PIEZA: una varilla/puntera no debe devolver tubos, etc.
+// Detecta el sustantivo principal de la pieza. Si la solicitud pide uno concreto,
+// se descartan candidatos cuyo sustantivo principal sea de OTRA familia incompatible.
+const FAMILIAS_PIEZA: Array<{ familia: string; tokens: string[] }> = [
+  { familia: 'tubo',      tokens: ['tubo', 'tuberia'] },
+  { familia: 'anillo_seg', tokens: ['arillo', 'aro seg', 'anillo seg', 'aro de seg', 'anillo de seg', 'circlip', 'seeger'] },
+  { familia: 'varilla',   tokens: ['varilla', 'redondo macizo', 'barra macizo'] },
+  { familia: 'puntera',   tokens: ['puntera'] },
+  { familia: 'codo',      tokens: ['codo'] },
+  { familia: 'brida',     tokens: ['brida'] },
+  { familia: 'machon',    tokens: ['machon', 'machón'] },
+  { familia: 'chapa',     tokens: ['chapa', 'plancha', 'lamina'] },
+  { familia: 'perfil',    tokens: ['perfil', 'angulo', 'pletina', 'plantilla'] },
+  { familia: 'valvula',   tokens: ['valvula', 'válvula'] },
+  { familia: 'malla',     tokens: ['malla', 'rejilla', 'electrosoldada', 'red inox'] },
+  { familia: 'racor',     tokens: ['racor', 'abrazadera'] },
+  { familia: 'tornilleria', tokens: ['tornillo', 'tuerca', 'arandela', 'esparrago', 'allen', 'd-933', 'd-912', 'd-934'] },
+  { familia: 'llave',     tokens: ['llave de vaso', 'vaso', 'carraca', 'llave'] },
+]
+
+function detectarFamilia(texto: string): string | null {
+  const t = norm(texto)
+  for (const f of FAMILIAS_PIEZA) {
+    if (f.tokens.some((tk) => t.includes(tk))) return f.familia
+  }
+  return null
+}
+
+// Familias que NO deben mezclarse entre sí (cada una es excluyente del resto cuando se piden por nombre).
+function familiasIncompatibles(pedida: string | null, candidata: string | null): boolean {
+  if (!pedida || !candidata) return false
+  return pedida !== candidata
 }
 
 function aplicarEquivalencia(codigo: string, nombre: string): { codigo: string; nombre: string } {
@@ -196,79 +507,134 @@ function extraerSAPDeSolicitud(descripcion: string): string {
   return m ? m[1] : ''
 }
 
-// Sinónimos industriales para mejorar la búsqueda de SAPs
-const SINONIMOS_INDUSTRIALES: Record<string, string[]> = {
-  plantilla: ['pletina'],
-  pletina: ['plantilla'],
-  abrazadera: ['abraz'],
-  abraz: ['abrazadera'],
-  brazadera: ['abrazadera', 'abraz'],
-  inox: ['inoxidable'],
-  inoxidable: ['inox'],
-  galvanizado: ['galv'],
-  galv: ['galvanizado'],
-  tornillo: ['torn'],
-  tuerca: ['tuec'],
-  rodamiento: ['rodto', 'rdto'],
-  rodto: ['rodamiento'],
-  valvula: ['val', 'vlv'],
-  val: ['valvula'],
-  manguera: ['mangu'],
-  reductor: ['reduc'],
-  contactor: ['ctactor', 'ctac'],
-  electrovalvula: ['electroval'],
+// Describe en texto la medida pedida y la del SAP, para la nota de "aproximado".
+function describirMedida(m: Medidas): string {
+  const partes: string[] = []
+  if (m.seccion.length >= 2) partes.push(m.seccion.join('x'))
+  if (m.pulgadas.length) partes.push(m.pulgadas.map((p) => `${parseFloat(p)}"`).join('/'))
+  if (m.sch.length) partes.push('SCH-' + m.sch.join('/'))
+  if (m.dn.length) partes.push('DN' + m.dn.join('/'))
+  if (m.mm.length && m.seccion.length < 2) partes.push(m.mm.join('x') + ' mm')
+  return partes.join(' ')
 }
 
-function expandirConSinonimos(tokens: string[]): string[] {
-  const result = [...tokens]
-  for (const t of tokens) {
-    const syns = SINONIMOS_INDUSTRIALES[t] ?? []
-    for (const s of syns) {
-      if (!result.includes(s)) result.push(s)
-    }
-  }
-  return result
-}
-
-// Busca SAPs relevantes. Tokens de la descripción del usuario tienen peso x15,
-// keywords extra del override tienen peso x3 (evita que keywords de tubo "ganen" a pletinas).
+// ════════════════════════════════════════════════════════════════════════
+//  BÚSQUEDA SAP RELEVANTE (dos pasadas: EXACTOS y, si faltan, APROXIMADOS)
+//  - usa tokens abreviados estilo comprador + VARIANTES generadas por la IA
+//    (ej. "ari seg 25", "aro seg 25", "anillo seg 25") para cubrir cómo está
+//    codificado el material en SAP (arillo / aro / anillo...)
+//  - exactos = misma medida; aproximados = misma familia, otra medida (marcados ~)
+//  - NUNCA deja un material sin candidato si existe algo de la misma familia
+// ════════════════════════════════════════════════════════════════════════
 function buscarSapsRelevantes(
   descNorm: string,
   sapHistorico: SapRow[],
   proveedorCodigo?: string,
   extraKeywords: string[] = [],
-  maxResults = 5
-): Array<{ codigo: string; descripcion: string; proveedor: string }> {
-  const descBaseTokens = descNorm.split(/\s+/).filter((t) => t.length >= 3)
-  const descTokens = expandirConSinonimos(
-    descBaseTokens.filter((t, i, arr) => arr.indexOf(t) === i)
-  )
+  maxResults = 5,
+  opciones: { aplicarFiltroMedidas?: boolean; variantes?: string[] } = {}
+): SapSugerido[] {
+  const aplicarFiltroMedidas = opciones.aplicarFiltroMedidas !== false
 
-  const extraTokens = extraKeywords
-    .map(norm)
-    .filter((k) => k.length >= 3 && !descTokens.includes(k))
+  // Tokens base (de la descripción) + expansión de sinónimos + keywords del override/guía
+  const baseTokens = tokensBusquedaSap(descNorm)
+  const baseConSinonimos = expandirConSinonimos(baseTokens)
+  const tokens = [...baseConSinonimos, ...extraKeywords.map(norm)]
+    .filter((t) => t && t.length >= 2)
     .filter((t, i, arr) => arr.indexOf(t) === i)
 
-  if (descTokens.length === 0 && extraTokens.length === 0) return []
+  // VARIANTES IA: cada una es una "consulta SAP" tipo "ari seg 25".
+  // Convertimos cada variante en su propio set de tokens. Un SAP que case con
+  // CUALQUIER variante entera puntúa fuerte (es como teclearla en SAP).
+  const variantesTokens: string[][] = (opciones.variantes ?? [])
+    .map((v) => norm(v).split(/\s+/).filter((t) => t.length >= 2))
+    .filter((arr) => arr.length > 0)
 
-  return sapHistorico
+  if (tokens.length === 0 && variantesTokens.length === 0) return []
+
+  const medidasPedidas = extraerMedidas(descNorm)
+  const descMedida = describirMedida(medidasPedidas)
+  const haySolicitudConMedida =
+    medidasPedidas.pulgadas.length > 0 ||
+    medidasPedidas.sch.length > 0 ||
+    medidasPedidas.dn.length > 0 ||
+    medidasPedidas.mm.length > 0 ||
+    medidasPedidas.seccion.length >= 2
+
+  const familiaPedida = detectarFamilia(descNorm)
+
+  const puntuados = sapHistorico
     .filter((s) => !esSapGenerico(s['Código SAP']))
+    .filter((s) => {
+      if (familiaPedida) {
+        const familiaCand = detectarFamilia(s['Descripción Material'])
+        if (familiasIncompatibles(familiaPedida, familiaCand)) return false
+      }
+      return true
+    })
     .map((s) => {
       const d = norm(s['Descripción Material'])
-      const descMatches = descTokens.filter((t) => d.includes(t)).length
-      const extraMatches = extraTokens.filter((t) => d.includes(t)).length
+      const tokenMatches = tokens.filter((t) => d.includes(t)).length
+
+      // Coincidencia por variante: cuántos tokens de la variante están en el SAP.
+      // La MEJOR variante (la que más casa) define el bonus. Si una variante casa
+      // entera, es señal fortísima de que es el material correcto.
+      let mejorVariante = 0
+      for (const vt of variantesTokens) {
+        const hits = vt.filter((t) => d.includes(t)).length
+        const ratio = hits / vt.length
+        const puntos = hits * 8 + (ratio >= 0.99 ? 12 : 0) // variante completa => +12
+        if (puntos > mejorVariante) mejorVariante = puntos
+      }
+
       const provBonus = proveedorCodigo && s['Cód. Proveedor PRINCIPAL'] === proveedorCodigo ? 4 : 0
       const freq = Math.log(Number(s['Veces Comprado']) + 1)
-      return { sap: s, score: descMatches * 15 + extraMatches * 3 + provBonus + freq }
+      const medidasCand = extraerMedidas(s['Descripción Material'])
+      const exacto = !haySolicitudConMedida || !aplicarFiltroMedidas
+        ? true
+        : medidasCompatibles(medidasPedidas, medidasCand)
+      const medidaBonus = exacto && haySolicitudConMedida ? 8 : 0
+
+      const score = tokenMatches * 10 + mejorVariante + provBonus + freq + medidaBonus
+      // Un SAP entra si casa por tokens de la descripción O por alguna variante IA.
+      const relevante = tokenMatches >= 1 || mejorVariante >= 8
+      return { sap: s, relevante, exacto, medidasCand, score }
     })
-    .filter(({ score }) => score >= 15)
+    .filter(({ relevante }) => relevante)
     .sort((a, b) => b.score - a.score)
-    .slice(0, maxResults)
-    .map(({ sap }) => ({
-      codigo: sap['Código SAP'],
-      descripcion: sap['Descripción Material'],
-      proveedor: sap['Nombre Proveedor PRINCIPAL'],
-    }))
+
+  const exactos = puntuados.filter((p) => p.exacto)
+  const aproximados = puntuados.filter((p) => !p.exacto)
+
+  const salida: SapSugerido[] = []
+
+  // 1) Exactos primero (sin marca)
+  for (const p of exactos.slice(0, maxResults)) {
+    salida.push({
+      codigo: p.sap['Código SAP'],
+      descripcion: p.sap['Descripción Material'],
+      proveedor: p.sap['Nombre Proveedor PRINCIPAL'],
+    })
+  }
+
+  // 2) Si no hay exactos (o faltan), rellena con aproximados MARCADOS
+  if (salida.length < maxResults) {
+    for (const p of aproximados.slice(0, maxResults - salida.length)) {
+      const medCand = describirMedida(p.medidasCand)
+      const nota = haySolicitudConMedida && descMedida
+        ? `Medida no exacta: pedido ${descMedida}${medCand ? `, SAP ${medCand}` : ''}. Verificar/cambiar con proveedor.`
+        : 'Coincidencia aproximada — verificar con proveedor.'
+      salida.push({
+        codigo: p.sap['Código SAP'],
+        descripcion: p.sap['Descripción Material'],
+        proveedor: p.sap['Nombre Proveedor PRINCIPAL'],
+        aproximado: true,
+        notaMedida: nota,
+      })
+    }
+  }
+
+  return salida
 }
 
 // PASO 1: Detectar MARCA en MARCAS_A_PROVEEDOR
@@ -334,7 +700,7 @@ function paso4Categoria(categoria: string, proveedores: ProveedorRow[]): Proveed
     .slice(0, 3)
 }
 
-export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlgoritmo {
+export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusqueda: string[] = []): ResultadoAlgoritmo {
   const descNorm = norm(descripcion)
   const sapEnSolicitud = extraerSAPDeSolicitud(descripcion)
 
@@ -344,7 +710,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
   let marcaDetectada = 'no especificada'
   let principal: CandidatoProveedor | null = null
   let alternativas: CandidatoProveedor[] = []
-  let sapsSugeridos: Array<{ codigo: string; descripcion: string; proveedor: string }> = []
+  let sapsSugeridos: SapSugerido[] = []
   let candidatoCentralizar = false
   let notasSap = ''
   let notasGuia = ''
@@ -382,15 +748,16 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     }
   }
 
-  // Comprueba si un token (que puede ser multi-palabra) aparece en la descripción.
-  // Para multi-palabra: todos los sub-tokens deben estar presentes (no importa el orden/distancia).
+  // Comprueba un token (posiblemente multi-palabra) contra la descripción.
+  // Para tokens con varias palabras: basta con que TODAS estén presentes en la desc
+  // (no importa la distancia ni el orden). Así "abrazadera inox" casa con "abrazadera 32mm inox".
   function tokenEnDesc(token: string, desc: string): boolean {
     const palabras = token.split(/\s+/).filter((w) => w.length >= 3)
     if (palabras.length <= 1) return desc.includes(token)
     return palabras.every((w) => desc.includes(w))
   }
 
-  // PASO 0: Overrides por material/marca con proveedor conocido (orden importa: específico → genérico)
+  // PASO 0: Overrides por material/marca (orden importa: herramienta → marca → inox sub-tipo → inox genérico)
   for (const override of MARCAS_OVERRIDE) {
     if (override.tokens.some((t) => tokenEnDesc(t, descNorm))) {
       pasoDeterminante = 1
@@ -399,14 +766,44 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
       categoria = override.categoria
       principal = { nombre: override.nombre, codigo: override.codigo, nota: override.nota }
 
-      // Alternativas hardcodeadas del override (aplicar equivalencias)
       alternativas = override.alternativas.map((a) => {
         const eq = aplicarEquivalencia(a.codigo, a.nombre)
         return { nombre: eq.nombre, codigo: eq.codigo, nota: a.nota }
       })
 
-      // SAPs con scoring multi-token: usa tokens de la descripción + keywords del override
-      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, override.codigo, override.sapKeywords, 5)
+      // SAPs con búsqueda abreviada + filtro dimensional (salvo herramientas tipo "del 13")
+      sapsSugeridos = buscarSapsRelevantes(
+        descNorm,
+        db.sapHistorico,
+        override.codigo,
+        override.sapKeywords,
+        5,
+        { aplicarFiltroMedidas: !override.ignorarFiltroMedidas, variantes: variantesBusqueda }
+      )
+
+      // En inox genérico: si hay un SAP candidato EXACTO, el proveedor principal se toma
+      // de ese SAP (lo sirven varios proveedores). El override pasa a alternativa.
+      if (override.inferirProveedorDeSap && sapsSugeridos.length > 0) {
+        const primerExacto = sapsSugeridos.find((s) => !s.aproximado) || sapsSugeridos[0]
+        const provRow = db.proveedores.find((p) => norm(p['Nombre Proveedor']) === norm(primerExacto.proveedor))
+        let provInferido: CandidatoProveedor
+        if (provRow) {
+          provInferido = normalizarProveedor(provRow['Código Proveedor'], provRow['Nombre Proveedor'])
+        } else {
+          // No está en tabla proveedores: usamos nombre del SAP + equivalencia por nombre
+          const eq = aplicarEquivalencia('', primerExacto.proveedor)
+          provInferido = { codigo: eq.codigo, nombre: eq.nombre || primerExacto.proveedor }
+        }
+        if (provInferido.codigo && provInferido.codigo !== principal.codigo) {
+          // El override actual baja a alternativa (si no estaba ya)
+          if (!alternativas.some((a) => a.codigo === principal!.codigo)) {
+            alternativas = [{ nombre: principal.nombre, codigo: principal.codigo }, ...alternativas]
+          }
+          principal = provInferido
+        }
+        // Quitar de alternativas el que ahora es principal
+        alternativas = alternativas.filter((a) => a.codigo !== principal!.codigo)
+      }
 
       return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
     }
@@ -431,8 +828,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
       }
     }
 
-    // SAPs con scoring multi-token
-    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, provPrincipal.codigo, [norm(marcaDetectada)], 5)
+    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, provPrincipal.codigo, [norm(marcaDetectada)], 5, { variantes: variantesBusqueda })
 
     return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
   }
@@ -458,9 +854,8 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     }
     alternativas = alts
 
-    // SAPs con scoring multi-token: usa la descripción del usuario + keywords de la guía
     const guiaKeywords = (guiaRow['Palabras clave de detección'] ?? '').split(',').map((k) => norm(k.trim())).filter((k) => k.length >= 3)
-    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, guiaKeywords, 5)
+    sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, guiaKeywords, 5, { variantes: variantesBusqueda })
 
     return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
   }
@@ -475,13 +870,27 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
     if (provsFallback.length > 0) {
       principal = normalizarProveedor(provsFallback[0]['Código Proveedor'], provsFallback[0]['Nombre Proveedor'])
       alternativas = provsFallback.slice(1).map((p) => normalizarProveedor(p['Código Proveedor'], p['Nombre Proveedor']))
-      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, [], 4)
+      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, [], 4, { variantes: variantesBusqueda })
     }
   }
 
-  // PASO 5: Sin match — pedir aclaración
+  // PASO 5: Sin match de proveedor — pedir aclaración.
+  // Aun así, si la IA dio variantes, intentamos encontrar SAPs parecidos para
+  // que el usuario al menos tenga códigos candidatos que aceptar.
   if (!principal) {
     pasoDeterminante = 5
+    if (sapsSugeridos.length === 0 && variantesBusqueda.length > 0) {
+      sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, undefined, [], 5, { variantes: variantesBusqueda })
+      // Si encontramos SAPs, derivamos un proveedor candidato del más frecuente
+      if (sapsSugeridos.length > 0) {
+        const provNombre = sapsSugeridos[0].proveedor
+        const provRow = db.proveedores.find((p) => norm(p['Nombre Proveedor']) === norm(provNombre))
+        if (provRow) {
+          principal = normalizarProveedor(provRow['Código Proveedor'], provRow['Nombre Proveedor'])
+          tipoMaterial = tipoMaterial === 'No clasificado' ? sapsSugeridos[0].descripcion : tipoMaterial
+        }
+      }
+    }
   }
 
   return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
@@ -489,6 +898,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData): ResultadoAlg
 
 function inferirCategoria(descNorm: string): string {
   const mapaCategorias: Array<{ keywords: string[]; categoria: string }> = [
+    { keywords: ['vaso hexagonal', 'llave de vaso', 'carraca', 'destornillador', 'llave fija', 'llave allen'], categoria: 'HERRAMIENTA MANUAL' },
     { keywords: ['rodamiento', 'cojinete', 'bearing'], categoria: 'RODAMIENTOS' },
     { keywords: ['banda', 'correa transportadora', 'conveyor'], categoria: 'BANDAS TRANSPORTADORAS' },
     { keywords: ['motoreductor', 'motorreductor', 'reductor', 'motovario', 'motor electrico', 'motor trifasico'], categoria: 'MOTORES' },
@@ -513,4 +923,75 @@ function inferirCategoria(descNorm: string): string {
     }
   }
   return ''
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  UNIFICACIÓN DE PEDIDO POR PROVEEDOR
+//  Regla del negocio: si varios materiales son del MISMO tipo (categoría),
+//  se agrupan en un solo proveedor (el mayoritario para esa categoría) para
+//  no hacer 2 pedidos. El material movido se MARCA (unificado=true) con nota.
+// ════════════════════════════════════════════════════════════════════════
+export interface ItemPedido {
+  descripcion: string
+  cantidad: number
+  categoria: string
+  proveedorOriginal: CandidatoProveedor | null
+  proveedorAsignado: CandidatoProveedor | null
+  unificado: boolean          // true si se movió a otro proveedor para unificar
+  notaUnificacion?: string
+  sapsSugeridos?: Array<{ codigo: string; descripcion: string; proveedor: string; nota?: string; aproximado?: boolean }>
+}
+
+export function unificarPedido(items: ItemPedido[]): ItemPedido[] {
+  // Agrupa por categoría. Dentro de cada categoría, elige el proveedor con más
+  // líneas (mayoritario) y mueve el resto a él, marcándolos.
+  const porCategoria = new Map<string, ItemPedido[]>()
+  for (const it of items) {
+    const cat = norm(it.categoria || 'sin-categoria')
+    if (!porCategoria.has(cat)) porCategoria.set(cat, [])
+    porCategoria.get(cat)!.push(it)
+  }
+
+  for (const grupo of porCategoria.values()) {
+    if (grupo.length < 2) continue // nada que unificar
+
+    // Cuenta líneas por proveedor (usando el original)
+    const conteo = new Map<string, { prov: CandidatoProveedor; n: number }>()
+    for (const it of grupo) {
+      const p = it.proveedorOriginal
+      if (!p || !p.codigo) continue
+      const cur = conteo.get(p.codigo)
+      if (cur) cur.n++
+      else conteo.set(p.codigo, { prov: { nombre: p.nombre, codigo: p.codigo }, n: 1 })
+    }
+    if (conteo.size < 2) continue // todos ya van al mismo proveedor
+
+    // Proveedor mayoritario de la categoría
+    const mayoritario = [...conteo.values()].sort((a, b) => b.n - a.n)[0]
+    if (!mayoritario) continue
+
+    for (const it of grupo) {
+      const orig = it.proveedorOriginal
+      if (!orig || !orig.codigo) continue
+      if (orig.codigo === mayoritario.prov.codigo) {
+        it.proveedorAsignado = orig
+        it.unificado = false
+      } else {
+        // Movemos al mayoritario y marcamos
+        it.proveedorAsignado = { nombre: mayoritario.prov.nombre, codigo: mayoritario.prov.codigo }
+        it.unificado = true
+        it.notaUnificacion = `Se incluye en ${mayoritario.prov.nombre} para unificar pedido (histórico/principal: ${orig.nombre}). Confirmar que ${mayoritario.prov.nombre} puede servirlo.`
+      }
+    }
+  }
+
+  // Los que no se tocaron conservan su proveedor original como asignado
+  for (const it of items) {
+    if (!it.proveedorAsignado) {
+      it.proveedorAsignado = it.proveedorOriginal
+      it.unificado = false
+    }
+  }
+
+  return items
 }

@@ -1,11 +1,12 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import Header from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
+import PedidoBuilder, { construirSeleccionInicial } from '@/components/PedidoBuilder'
 import ExportSAP from '@/components/ExportSAP'
-import type { RecomendacionNueva, Material, ProveedorSimple } from '@/lib/types'
+import type { RecomendacionNueva, Material, ItemPedidoUnificado, SeleccionPedido, ProveedorSimple } from '@/lib/types'
 import {
   PackageSearch,
   AlertCircle,
@@ -37,6 +38,7 @@ export default function HomePage() {
   const [pasoActual, setPasoActual] = useState<Paso>(null)
   const [log, setLog] = useState<LogEntry[]>([])
   const [recomendaciones, setRecomendaciones] = useState<RecomendacionNueva[]>([])
+  const [selecciones, setSelecciones] = useState<SeleccionPedido[]>([])
   const [error, setError] = useState<string | null>(null)
   const [consultas, setConsultas] = useState<string[]>([])
 
@@ -63,6 +65,7 @@ export default function HomePage() {
       setError(null)
       setLog([])
       setRecomendaciones([])
+      setSelecciones([])
       setPasoActual(null)
 
       try {
@@ -128,12 +131,16 @@ export default function HomePage() {
           seleccionado: true,
         }))
 
+        // Pedido unificado por proveedor (viene del nuevo motor)
+        const unificado: ItemPedidoUnificado[] = recData.pedidoUnificado || []
+
         const altos = recs.filter((r) => r.nivel_confianza === 'ALTO').length
         const medios = recs.filter((r) => r.nivel_confianza === 'MEDIO').length
         const bajos = recs.filter((r) => r.nivel_confianza === 'BAJO').length
         addLog('razonamiento', `ALTO: ${altos}  MEDIO: ${medios}  BAJO: ${bajos}`, true)
 
         setRecomendaciones(recs)
+        setSelecciones(construirSeleccionInicial(recs, unificado))
         setConsultas((prev) => [consulta.slice(0, 80), ...prev].slice(0, 5))
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error desconocido'
@@ -151,16 +158,15 @@ export default function HomePage() {
     setRecomendaciones((prev) =>
       prev.map((r, i) => (i === index ? { ...r, seleccionado: !r.seleccionado } : r))
     )
-  }
-
-  const handleUpdate = (index: number, updates: Partial<RecomendacionNueva>) => {
-    setRecomendaciones((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, ...updates } : r))
+    // Sincroniza con el panel de configuración del pedido
+    setSelecciones((prev) =>
+      prev.map((s) => (s.indice === index ? { ...s, incluido: !s.incluido } : s))
     )
   }
 
   const handleReset = () => {
     setRecomendaciones([])
+    setSelecciones([])
     setLog([])
     setError(null)
   }
@@ -171,28 +177,6 @@ export default function HomePage() {
     busqueda: { icon: PackageSearch, label: 'Consultando base de datos' },
     razonamiento: { icon: BrainCircuit, label: 'Analizando con IA' },
   }
-
-  // Map RecomendacionNueva to legacy Recomendacion shape for ExportSAP
-  const recsParaExport = recomendaciones.map((r) => ({
-    cantidad: r.cantidad,
-    material_detectado: r.material_detectado,
-    recomendacion_principal: {
-      proveedor: r.proveedor_recomendado?.nombre || '',
-      codigo_sap: r.codigos_sap_sugeridos?.[0]?.codigo || '',
-      sap_status: r.codigos_sap_sugeridos?.length > 0 ? 'confirmado' as const : 'ninguno' as const,
-      material_historico: r.codigos_sap_sugeridos?.[0]?.descripcion || '',
-      motivo: r.motivo || '',
-    },
-    alternativas: (r.alternativas || []).map((a) => ({
-      proveedor: a.nombre,
-      codigo_sap: a.codigo,
-      material_historico: '',
-      nota: a.nota || '',
-    })),
-    nivel_confianza: r.nivel_confianza,
-    observaciones: r.observaciones || '',
-    seleccionado: r.seleccionado,
-  }))
 
   return (
     <div className="min-h-screen bg-[#08080f]">
@@ -273,13 +257,19 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: true })))}
+                  onClick={() => {
+                    setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: true })))
+                    setSelecciones((prev) => prev.map((s) => ({ ...s, incluido: true })))
+                  }}
                   className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
                 >
                   Todos
                 </button>
                 <button
-                  onClick={() => setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: false })))}
+                  onClick={() => {
+                    setRecomendaciones((prev) => prev.map((r) => ({ ...r, seleccionado: false })))
+                    setSelecciones((prev) => prev.map((s) => ({ ...s, incluido: false })))
+                  }}
                   className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
                 >
                   Ninguno
@@ -295,18 +285,22 @@ export default function HomePage() {
             </div>
 
             {recomendaciones.map((rec, i) => (
-              <MaterialCard
-                key={i}
-                rec={rec}
-                index={i}
-                onToggle={handleToggle}
-                proveedoresDB={proveedoresDB}
-                onUpdate={(updates) => handleUpdate(i, updates)}
-              />
+              <MaterialCard key={i} rec={rec} index={i} onToggle={handleToggle} />
             ))}
 
+            {/* Panel de configuración del pedido: elegir SAP y proveedor por línea */}
             <div className="mt-6">
-              <ExportSAP recomendaciones={recsParaExport} />
+              <PedidoBuilder
+                recomendaciones={recomendaciones}
+                selecciones={selecciones}
+                onChange={setSelecciones}
+                proveedoresDB={proveedoresDB}
+              />
+            </div>
+
+            {/* Pedido final listo para copiar/pegar */}
+            <div className="mt-4">
+              <ExportSAP selecciones={selecciones} />
             </div>
           </div>
         )}
@@ -331,15 +325,6 @@ export default function HomePage() {
       </main>
     </div>
   )
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve((reader.result as string).split(',')[1])
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
 }
 
 // Comprime imagen antes de OCR para reducir payload

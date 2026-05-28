@@ -1,4 +1,4 @@
-export interface Material {
+﻿export interface Material {
   descripcion: string
   cantidad: number
 }
@@ -54,7 +54,7 @@ export interface RecomendacionPrincipal {
   motivo: string
 }
 
-// Legacy type (kept for ExportSAP compatibility)
+// Legacy type (kept for backward compat)
 export interface Recomendacion {
   cantidad: number
   material_detectado: string
@@ -64,14 +64,62 @@ export interface Recomendacion {
   observaciones: string
   seleccionado?: boolean
   _fuzzyData?: FuzzyResult
-  // New fields from /api/recommend
   tipo_material?: string
   marca_detectada?: string
   proveedor_recomendado?: { nombre: string; codigo: string }
   alternativas_nuevas?: Array<{ nombre: string; codigo: string; nota?: string }>
-  codigos_sap_sugeridos?: Array<{ codigo: string; descripcion: string; proveedor: string }>
+  codigos_sap_sugeridos?: SapSugeridoUI[]
   motivo?: string
   _pasoDeterminante?: number
+}
+
+// ── Tipos nuevos del motor v2 ──
+
+export interface SapSugeridoUI {
+  codigo: string
+  descripcion: string
+  proveedor: string
+  aproximado?: boolean   // true si la medida no es exacta (marcado con ~)
+  nota?: string          // "Medida no exacta: pedido 15x15, SAP 20x20. Verificar."
+}
+
+export interface RecomendacionNueva {
+  cantidad: number
+  material_detectado: string
+  descripcion: string
+  categoria: string
+  tipo_material: string
+  marca_detectada: string
+  proveedor_recomendado: { nombre: string; codigo: string }
+  alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
+  codigos_sap_sugeridos: SapSugeridoUI[]
+  nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
+  motivo: string
+  observaciones: string
+  seleccionado: boolean
+  _pasoDeterminante: number
+}
+
+export interface ItemPedidoUnificado {
+  indice: number
+  descripcion: string
+  cantidad: number
+  proveedor_asignado: { nombre: string; codigo: string } | null
+  unificado: boolean
+  nota_unificacion: string | null
+}
+
+// Selección manual del usuario por cada material (panel PedidoBuilder).
+// Parte de los valores que dio la IA, pero el usuario puede cambiarlos.
+export interface SeleccionPedido {
+  indice: number              // índice del material en recomendaciones
+  incluido: boolean           // si va al pedido final
+  sapElegido: string          // código SAP 502... elegido (o '' = texto libre)
+  sapDescripcion: string      // descripción del SAP elegido (para mostrar)
+  sapAproximado: boolean      // si el SAP elegido era aproximado (~)
+  proveedorNombre: string     // proveedor elegido
+  proveedorCodigo: string     // código del proveedor elegido
+  cantidad: number
 }
 
 export interface ProveedorSimple {
@@ -84,20 +132,4 @@ export interface SapSearchResult {
   descripcion: string
   proveedor: string
   veces: number
-}
-
-// New unified recommendation type from /api/recommend
-export interface RecomendacionNueva {
-  cantidad: number
-  material_detectado: string
-  tipo_material: string
-  marca_detectada: string
-  proveedor_recomendado: { nombre: string; codigo: string }
-  alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
-  codigos_sap_sugeridos: Array<{ codigo: string; descripcion: string; proveedor: string }>
-  nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
-  motivo: string
-  observaciones: string
-  seleccionado: boolean
-  _pasoDeterminante: number
 }
