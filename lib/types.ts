@@ -98,6 +98,7 @@ export interface RecomendacionNueva {
   observaciones: string
   seleccionado: boolean
   _pasoDeterminante: number
+  leyendaMedidas?: string  // p.ej. "NW/DN 50 = 2"  ·  2" = NW/DN 50"
 }
 
 export interface ItemPedidoUnificado {

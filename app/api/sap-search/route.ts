@@ -32,6 +32,24 @@ const SINONIMOS: Record<string, string[]> = {
   val: ['valvula'],
 }
 
+// Tabla DN/NW ↔ pulgadas para expandir búsquedas ("nw50" → también busca "2")
+const TABLA_DN = [
+  { dn: 6,  pulg: 0.125, corta: '1/8'  },
+  { dn: 8,  pulg: 0.25,  corta: '1/4'  },
+  { dn: 10, pulg: 0.375, corta: '3/8'  },
+  { dn: 15, pulg: 0.5,   corta: '1/2'  },
+  { dn: 20, pulg: 0.75,  corta: '3/4'  },
+  { dn: 25, pulg: 1.0,   corta: '1'    },
+  { dn: 32, pulg: 1.25,  corta: '1-1/4'},
+  { dn: 40, pulg: 1.5,   corta: '1-1/2'},
+  { dn: 50, pulg: 2.0,   corta: '2'    },
+  { dn: 65, pulg: 2.5,   corta: '2-1/2'},
+  { dn: 80, pulg: 3.0,   corta: '3'    },
+  { dn: 100,pulg: 4.0,   corta: '4'    },
+  { dn: 125,pulg: 5.0,   corta: '5'    },
+  { dn: 150,pulg: 6.0,   corta: '6'    },
+]
+
 function expandirSinonimos(tokens: string[]): string[] {
   const result = [...tokens]
   for (const t of tokens) {
@@ -41,6 +59,35 @@ function expandirSinonimos(tokens: string[]): string[] {
     }
   }
   return result
+}
+
+// Expande tokens con equivalencias DN/NW↔pulgadas
+function expandirMedidas(tokens: string[]): string[] {
+  const extra: string[] = []
+  const texto = tokens.join(' ')
+
+  // Detectar "nwXX" o "dnXX" → añadir equivalente en pulgadas
+  const mDN = texto.match(/\b(?:nw|dn)[\s\-]?(\d{1,4})\b/gi) ?? []
+  for (const m of mDN) {
+    const num = parseInt(m.replace(/[^\d]/g, ''))
+    const fila = TABLA_DN.find((r) => r.dn === num)
+    if (fila) {
+      extra.push(fila.corta, String(fila.dn), `nw${num}`, `nw ${num}`, `nw-${num}`, `dn${num}`, `dn ${num}`, `dn-${num}`)
+    }
+  }
+
+  // Detectar pulgadas (número suelto que coincida con una fila) → añadir DN equivalente
+  for (const t of tokens) {
+    const pDec = parseFloat(t.replace(',', '.'))
+    if (!isNaN(pDec)) {
+      const fila = TABLA_DN.find((r) => Math.abs(r.pulg - pDec) < 0.02)
+      if (fila) {
+        extra.push(String(fila.dn), `nw${fila.dn}`, `nw ${fila.dn}`, `nw-${fila.dn}`, `dn${fila.dn}`, `dn ${fila.dn}`)
+      }
+    }
+  }
+
+  return [...new Set([...tokens, ...extra])]
 }
 
 export async function POST(req: NextRequest) {
@@ -68,8 +115,8 @@ export async function POST(req: NextRequest) {
       .sort((a, b) => b.veces - a.veces)
       .slice(0, 15)
   } else {
-    const baseTokens = q.split(/\s+/).filter((t) => t.length >= 3)
-    const tokens = expandirSinonimos(baseTokens)
+    const baseTokens = q.split(/\s+/).filter((t) => t.length >= 2)
+    const tokens = expandirMedidas(expandirSinonimos(baseTokens))
 
     if (tokens.length === 0) return NextResponse.json([])
 

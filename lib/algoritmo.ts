@@ -26,6 +26,88 @@ export interface ResultadoAlgoritmo {
   candidatoCentralizar: boolean
   notasSap: string
   notasGuia: string
+  leyendaMedidas: string  // p.ej. "NW/DN 50 = 2"" (vacío si no hay conversión)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  TABLA DE CONVERSIÓN DN/NW ↔ PULGADAS (NPS / Nominal Pipe Size)
+//  Estándar ISO 6708 / DIN EN 10255 / ASME B36.10
+// ═══════════════════════════════════════════════════════════════════════
+interface FilaDN {
+  dn: number
+  pulgadaDecimal: number
+  pulgadaTexto: string  // "1 1/2""
+  pulgadaCorta: string  // "1-1/2" (tokens SAP sin espacio)
+  pulgadaNum: string    // "1.5" (decimal corto)
+}
+
+const TABLA_DN: FilaDN[] = [
+  { dn: 6,   pulgadaDecimal: 0.125,  pulgadaTexto: '1/8"',   pulgadaCorta: '1/8',   pulgadaNum: '0.125' },
+  { dn: 8,   pulgadaDecimal: 0.25,   pulgadaTexto: '1/4"',   pulgadaCorta: '1/4',   pulgadaNum: '0.25'  },
+  { dn: 10,  pulgadaDecimal: 0.375,  pulgadaTexto: '3/8"',   pulgadaCorta: '3/8',   pulgadaNum: '0.375' },
+  { dn: 15,  pulgadaDecimal: 0.5,    pulgadaTexto: '1/2"',   pulgadaCorta: '1/2',   pulgadaNum: '0.5'   },
+  { dn: 20,  pulgadaDecimal: 0.75,   pulgadaTexto: '3/4"',   pulgadaCorta: '3/4',   pulgadaNum: '0.75'  },
+  { dn: 25,  pulgadaDecimal: 1.0,    pulgadaTexto: '1"',     pulgadaCorta: '1',     pulgadaNum: '1'     },
+  { dn: 32,  pulgadaDecimal: 1.25,   pulgadaTexto: '1 1/4"', pulgadaCorta: '1-1/4', pulgadaNum: '1.25'  },
+  { dn: 40,  pulgadaDecimal: 1.5,    pulgadaTexto: '1 1/2"', pulgadaCorta: '1-1/2', pulgadaNum: '1.5'   },
+  { dn: 50,  pulgadaDecimal: 2.0,    pulgadaTexto: '2"',     pulgadaCorta: '2',     pulgadaNum: '2'     },
+  { dn: 65,  pulgadaDecimal: 2.5,    pulgadaTexto: '2 1/2"', pulgadaCorta: '2-1/2', pulgadaNum: '2.5'   },
+  { dn: 80,  pulgadaDecimal: 3.0,    pulgadaTexto: '3"',     pulgadaCorta: '3',     pulgadaNum: '3'     },
+  { dn: 100, pulgadaDecimal: 4.0,    pulgadaTexto: '4"',     pulgadaCorta: '4',     pulgadaNum: '4'     },
+  { dn: 125, pulgadaDecimal: 5.0,    pulgadaTexto: '5"',     pulgadaCorta: '5',     pulgadaNum: '5'     },
+  { dn: 150, pulgadaDecimal: 6.0,    pulgadaTexto: '6"',     pulgadaCorta: '6',     pulgadaNum: '6'     },
+]
+
+function dnAFila(dn: number): FilaDN | null {
+  return TABLA_DN.find((r) => r.dn === dn) ?? null
+}
+function pulgadaAFila(pDecimal: number): FilaDN | null {
+  return TABLA_DN.find((r) => Math.abs(r.pulgadaDecimal - pDecimal) < 0.02) ?? null
+}
+
+// Genera tokens adicionales de búsqueda por equivalencia DN↔pulgadas,
+// y construye la leyenda de conversión para mostrar al usuario.
+function tokensEquivalenciaMedidas(medidas: Medidas): { tokens: string[]; leyenda: string } {
+  const tokens: string[] = []
+  const partes: string[] = []
+
+  // DN/NW → pulgada equivalente
+  for (const dnStr of medidas.dn) {
+    const dn = Number(dnStr)
+    // Siempre añadir todas las formas posibles del DN/NW
+    tokens.push(`nw${dnStr}`, `nw ${dnStr}`, `nw-${dnStr}`, `dn${dnStr}`, `dn ${dnStr}`, `dn-${dnStr}`)
+    const fila = dnAFila(dn)
+    if (fila) {
+      // Añadir la pulgada equivalente como token de búsqueda
+      tokens.push(fila.pulgadaCorta, fila.pulgadaNum)
+      if (fila.pulgadaCorta.includes('/') || fila.pulgadaCorta.includes('-')) {
+        // "1 1/2" (con espacio, como aparece en SAP)
+        tokens.push(fila.pulgadaCorta.replace('-', ' '))
+      }
+      partes.push(`NW/DN ${dn} = ${fila.pulgadaTexto}`)
+    }
+  }
+
+  // Pulgadas → DN/NW equivalente
+  for (const pulg of medidas.pulgadas) {
+    const pDec = parseFloat(pulg)
+    const fila = pulgadaAFila(pDec)
+    if (fila) {
+      tokens.push(
+        String(fila.dn),
+        `nw${fila.dn}`, `nw ${fila.dn}`, `nw-${fila.dn}`,
+        `dn${fila.dn}`, `dn ${fila.dn}`, `dn-${fila.dn}`
+      )
+      if (!partes.some((p) => p.includes(`DN ${fila.dn}`))) {
+        partes.push(`${fila.pulgadaTexto} = NW/DN ${fila.dn}`)
+      }
+    }
+  }
+
+  return {
+    tokens: [...new Set(tokens.filter((t) => t.length >= 1))],
+    leyenda: partes.join('  ·  '),
+  }
 }
 
 // Equivalencias de proveedor: críticas, no negociables
@@ -315,33 +397,44 @@ function extraerMedidas(texto: string): Medidas {
 // Igual para SCH y para diámetro mm principal. Si la solicitud no especifica una dimensión,
 // no se filtra por ella (no penaliza de más).
 function medidasCompatibles(pedidas: Medidas, candidata: Medidas): boolean {
-  // Pulgadas
+  // ── Pulgadas mismo sistema ──
   if (pedidas.pulgadas.length > 0 && candidata.pulgadas.length > 0) {
-    const hayCoincidencia = pedidas.pulgadas.some((p) => candidata.pulgadas.includes(p))
-    if (!hayCoincidencia) return false
+    if (!pedidas.pulgadas.some((p) => candidata.pulgadas.includes(p))) return false
   }
-  // SCH
+  // ── SCH ──
   if (pedidas.sch.length > 0 && candidata.sch.length > 0) {
-    const hay = pedidas.sch.some((s) => candidata.sch.includes(s))
-    if (!hay) return false
+    if (!pedidas.sch.some((s) => candidata.sch.includes(s))) return false
   }
-  // DN / NW
+  // ── DN/NW mismo sistema ──
   if (pedidas.dn.length > 0 && candidata.dn.length > 0) {
-    const hay = pedidas.dn.some((d) => candidata.dn.includes(d))
-    if (!hay) return false
+    if (!pedidas.dn.some((d) => candidata.dn.includes(d))) return false
   }
-  // mm: comparamos el conjunto; si pide mm concretos y el candidato tiene mm pero ninguno coincide -> fuera
+  // ── CROSS-SISTEMA: DN↔pulgadas (NW 50 ≡ 2", DN 40 ≡ 1 1/2", etc.) ──
+  // Si la solicitud tiene DN y el candidato solo tiene pulgadas, verificar equivalencia
+  if (pedidas.dn.length > 0 && candidata.pulgadas.length > 0 && candidata.dn.length === 0) {
+    const pedidaDecimales = pedidas.dn.map((d) => dnAFila(Number(d))?.pulgadaDecimal ?? null).filter((n): n is number => n !== null)
+    if (pedidaDecimales.length > 0) {
+      const candDecimals = candidata.pulgadas.map(parseFloat)
+      if (!pedidaDecimales.some((pDec) => candDecimals.some((cDec) => Math.abs(pDec - cDec) < 0.02))) return false
+    }
+  }
+  // Inverso: solicitud en pulgadas, candidato en DN/NW
+  if (pedidas.pulgadas.length > 0 && candidata.dn.length > 0 && candidata.pulgadas.length === 0) {
+    const pedidaDecimals = pedidas.pulgadas.map(parseFloat)
+    const candDecimales = candidata.dn.map((d) => dnAFila(Number(d))?.pulgadaDecimal ?? null).filter((n): n is number => n !== null)
+    if (candDecimales.length > 0) {
+      if (!pedidaDecimals.some((pDec) => candDecimales.some((cDec) => Math.abs(pDec - cDec) < 0.02))) return false
+    }
+  }
+  // ── mm ──
   if (pedidas.mm.length > 0 && candidata.mm.length > 0) {
-    const hay = pedidas.mm.some((x) => candidata.mm.some((y) => Math.abs(x - y) < 0.01))
-    if (!hay) return false
+    if (!pedidas.mm.some((x) => candidata.mm.some((y) => Math.abs(x - y) < 0.01))) return false
   }
-  // Sección AxBxC: las DOS dimensiones mayores (sección principal) deben coincidir.
-  // Así 15x15x1.5 NO es compatible con 20x20x1.5 ni con 60x40x2 (espesor igual no basta).
+  // ── Sección AxBxC ──
   if (pedidas.seccion.length >= 2 && candidata.seccion.length >= 2) {
     const pA = pedidas.seccion[0], pB = pedidas.seccion[1]
     const cA = candidata.seccion[0], cB = candidata.seccion[1]
-    const coincide = Math.abs(pA - cA) < 0.01 && Math.abs(pB - cB) < 0.01
-    if (!coincide) return false
+    if (!(Math.abs(pA - cA) < 0.01 && Math.abs(pB - cB) < 0.01)) return false
   }
   return true
 }
@@ -536,23 +629,24 @@ function buscarSapsRelevantes(
 ): SapSugerido[] {
   const aplicarFiltroMedidas = opciones.aplicarFiltroMedidas !== false
 
-  // Tokens base (de la descripción) + expansión de sinónimos + keywords del override/guía
+  // Extraer medidas ANTES de los tokens para generar equivalencias DN↔pulgadas
+  const medidasPedidas = extraerMedidas(descNorm)
+  const { tokens: tokensEquiv } = tokensEquivalenciaMedidas(medidasPedidas)
+
+  // Tokens base (de la descripción) + sinónimos + equivalencias medidas + keywords override
   const baseTokens = tokensBusquedaSap(descNorm)
   const baseConSinonimos = expandirConSinonimos(baseTokens)
-  const tokens = [...baseConSinonimos, ...extraKeywords.map(norm)]
+  const tokens = [...baseConSinonimos, ...tokensEquiv, ...extraKeywords.map(norm)]
     .filter((t) => t && t.length >= 2)
     .filter((t, i, arr) => arr.indexOf(t) === i)
 
   // VARIANTES IA: cada una es una "consulta SAP" tipo "ari seg 25".
-  // Convertimos cada variante en su propio set de tokens. Un SAP que case con
-  // CUALQUIER variante entera puntúa fuerte (es como teclearla en SAP).
   const variantesTokens: string[][] = (opciones.variantes ?? [])
     .map((v) => norm(v).split(/\s+/).filter((t) => t.length >= 2))
     .filter((arr) => arr.length > 0)
 
   if (tokens.length === 0 && variantesTokens.length === 0) return []
-
-  const medidasPedidas = extraerMedidas(descNorm)
+  // (medidasPedidas ya fue extraído arriba)
   const descMedida = describirMedida(medidasPedidas)
   const haySolicitudConMedida =
     medidasPedidas.pulgadas.length > 0 ||
@@ -704,6 +798,10 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
   const descNorm = norm(descripcion)
   const sapEnSolicitud = extraerSAPDeSolicitud(descripcion)
 
+  // Calcular leyenda de conversiones de medida (DN↔pulgadas) para mostrar en la UI
+  const medidasDesc = extraerMedidas(descNorm)
+  const { leyenda: leyendaMedidas } = tokensEquivalenciaMedidas(medidasDesc)
+
   let pasoDeterminante: 1 | 2 | 3 | 4 | 5 = 5
   let tipoMaterial = 'No clasificado'
   let categoria = ''
@@ -743,7 +841,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
             alternativas.push({ codigo: eq.codigo, nombre: eq.nombre })
           }
         }
-        return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
+        return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia, leyendaMedidas }
       }
     }
   }
@@ -805,7 +903,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
         alternativas = alternativas.filter((a) => a.codigo !== principal!.codigo)
       }
 
-      return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
+      return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia, leyendaMedidas }
     }
   }
 
@@ -830,7 +928,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
 
     sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, provPrincipal.codigo, [norm(marcaDetectada)], 5, { variantes: variantesBusqueda })
 
-    return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
+    return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia, leyendaMedidas }
   }
 
   // PASO 2: Tipo de material por keywords en GUIA
@@ -857,7 +955,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
     const guiaKeywords = (guiaRow['Palabras clave de detección'] ?? '').split(',').map((k) => norm(k.trim())).filter((k) => k.length >= 3)
     sapsSugeridos = buscarSapsRelevantes(descNorm, db.sapHistorico, principal.codigo, guiaKeywords, 5, { variantes: variantesBusqueda })
 
-    return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
+    return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia, leyendaMedidas }
   }
 
   // PASO 4: Fallback por categoría genérica
@@ -893,7 +991,7 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
     }
   }
 
-  return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia }
+  return { pasoDeterminante, tipoMaterial, categoria, marcaDetectada, sapEnSolicitud, principal, alternativas, sapsSugeridos, candidatoCentralizar, notasSap, notasGuia, leyendaMedidas }
 }
 
 function inferirCategoria(descNorm: string): string {

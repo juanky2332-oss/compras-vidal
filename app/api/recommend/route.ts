@@ -115,6 +115,7 @@ interface RecomendacionNueva {
   observaciones: string
   seleccionado: boolean
   _pasoDeterminante: number
+  leyendaMedidas?: string
 }
 
 function limpiarTextoInterno(s: string): string {
@@ -233,6 +234,7 @@ INSTRUCCIONES:
     observaciones: limpiarTextoInterno(String(parsed.observaciones || '')),
     seleccionado: true,
     _pasoDeterminante: resultado.pasoDeterminante,
+    leyendaMedidas: resultado.leyendaMedidas || undefined,
   }
 }
 

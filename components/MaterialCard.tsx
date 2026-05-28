@@ -205,7 +205,18 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
               {/* SAPs sugeridos */}
               {tieneSAPs && (
                 <div>
-                  <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-2.5">Códigos SAP sugeridos</p>
+                  <div className="flex items-center justify-between mb-2.5 gap-2">
+                    <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">Códigos SAP sugeridos</p>
+                    {rec.leyendaMedidas && (
+                      <span
+                        className="text-[10px] font-mono px-2 py-0.5 rounded-full flex-shrink-0"
+                        style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', color: 'rgba(165,180,252,0.85)' }}
+                        title="Conversión de medidas aplicada en la búsqueda"
+                      >
+                        {rec.leyendaMedidas}
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     {rec.codigos_sap_sugeridos.slice(0, 4).map((sap, i) => (
                       <div
