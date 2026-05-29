@@ -458,31 +458,119 @@ const SUSTANTIVOS_CLAVE = [
   'brida', 'varilla', 'perfil', 'angulo', 'pletina', 'plantilla', 'malla', 'rejilla',
   'valvula', 'racor', 'abrazadera',
   'cuadrado', 'rectangular', 'redondo', 'electrosoldada',
-  'rodamiento', 'cojinete', 'correa', 'banda', 'cadena', 'pinon', 'motor', 'reductor',
+  'rodamiento', 'cojinete', 'correa', 'banda', 'cadena', 'pinon', 'piñon', 'motor', 'reductor',
   'bomba', 'cilindro', 'sensor', 'cable', 'manguera', 'junta', 'reten', 'llave', 'vaso',
   'tornillo', 'tuerca', 'arandela', 'esparrago', 'inox', 'inoxidable', 'pvc',
+  // mantenimiento / repuestos
+  'sello', 'labio', 'empaquetadura', 'retén',
+  'sprocket', 'engranaje', 'corona', 'chumacera', 'polea', 'tambor',
+  'electrovalvula', 'solenoide', 'actuador',
+  'filtro', 'contactor', 'variador', 'inverter', 'fusible',
+  'encoder', 'detector', 'casquillo', 'buje', 'manguito',
+  'lubricante', 'lubric', 'grasa', 'aceite',
+  'rodillo', 'eslabon', 'piñón',
 ]
 
 // Sinónimos industriales: expande tokens del comprador a como aparecen en SAP.
 // Ej: "plantilla" → también busca "pletina" porque las SAPs usan esa abreviatura.
 const SINONIMOS_INDUSTRIALES: Record<string, string[]> = {
+  // ── Inox / metálico ──
   plantilla: ['pletina'],
   pletina: ['plantilla'],
-  abrazadera: ['abraz'],
-  abraz: ['abrazadera'],
-  brazadera: ['abrazadera', 'abraz'],
   inox: ['inoxidable'],
   inoxidable: ['inox'],
   galvanizado: ['galv'],
   galv: ['galvanizado'],
+
+  // ── Fontanería / fijación ──
+  abrazadera: ['abraz'],
+  abraz: ['abrazadera'],
+  brazadera: ['abrazadera', 'abraz'],
   tornillo: ['torn'],
+  torn: ['tornillo'],
   tuerca: ['tuec'],
-  rodamiento: ['rodto', 'rdto'],
-  rodto: ['rodamiento'],
+  tuec: ['tuerca'],
+  arandela: ['arand'],
+  arand: ['arandela'],
+  esparrago: ['espag', 'varilla roscada'],
+  espag: ['esparrago'],
+  brida: ['flange'],
+
+  // ── Rodamientos / soportes ──
+  rodamiento: ['rodto', 'rdto', 'cojinete'],
+  rodto: ['rodamiento', 'cojinete'],
+  rdto: ['rodamiento'],
+  cojinete: ['rodamiento', 'rodto'],
+  chumacera: ['rodto', 'ucp', 'ucf', 'ucfl', 'soporte'],
+  ucp: ['chumacera', 'rodto'],
+  ucf: ['chumacera', 'rodto'],
+
+  // ── Estanqueidad / sellado ──
+  reten: ['sello', 'labio', 'seal'],
+  retén: ['reten', 'sello', 'labio'],
+  sello: ['reten', 'retén', 'labio'],
+  labio: ['reten', 'sello'],
+  junta: ['empaquetadura', 'jta', 'gasket'],
+  empaquetadura: ['junta', 'jta'],
+  jta: ['junta', 'empaquetadura'],
+  oring: ['o-ring', 'torico', 'anillo torico'],
+
+  // ── Transmisión mecánica ──
+  piñon: ['sprocket', 'corona', 'engranaje', 'pinon'],
+  pinon: ['piñon', 'sprocket', 'corona'],
+  piñón: ['piñon', 'sprocket', 'corona'],
+  sprocket: ['piñon', 'pinon', 'corona'],
+  corona: ['piñon', 'sprocket', 'engranaje'],
+  engranaje: ['piñon', 'corona', 'sprocket'],
+  correa: ['banda', 'cinturon', 'vbelt'],
+  banda: ['correa', 'cinturon'],
+  vbelt: ['correa', 'correa trapez'],
+  cadena: ['chain'],
+  polea: ['tambor', 'rueda'],
+  rodillo: ['rolete', 'roller'],
+
+  // ── Válvulas / neumática / hidráulica ──
   valvula: ['val', 'vlv'],
   val: ['valvula'],
-  manguera: ['mangu'],
+  vlv: ['valvula'],
+  electrovalvula: ['solenoide', 'val solenoide'],
+  solenoide: ['electrovalvula', 'val solenoide'],
+  cilindro: ['actuador', 'piston', 'cil'],
+  actuador: ['cilindro', 'cil'],
+  piston: ['cilindro'],
+  cil: ['cilindro'],
+  filtro: ['filt', 'filtr'],
+  filt: ['filtro'],
+
+  // ── Eléctrico / automatización ──
+  motor: ['mot'],
+  mot: ['motor'],
   reductor: ['reduc'],
+  reduc: ['reductor'],
+  contactor: ['cont'],
+  cont: ['contactor'],
+  variador: ['inverter', 'vdf'],
+  inverter: ['variador', 'vdf'],
+  fusible: ['fus'],
+  fus: ['fusible'],
+  rele: ['relé', 'rel'],
+  relé: ['rele', 'rel'],
+  sensor: ['detector', 'detect', 'sonda'],
+  detector: ['sensor', 'detect'],
+  'final de carrera': ['limit switch', 'microrruptor'],
+
+  // ── General industrial ──
+  bomba: ['bba'],
+  bba: ['bomba'],
+  manguera: ['mangu', 'tubo flexible'],
+  mangu: ['manguera'],
+  casquillo: ['buje', 'manguito'],
+  buje: ['casquillo', 'manguito'],
+  lubricante: ['lubric'],
+  grasa: ['lubric', 'lubricante'],
+  lubric: ['lubricante', 'grasa'],
+  tubo: ['tuberia'],
+  tuberia: ['tubo'],
 }
 
 function expandirConSinonimos(tokens: string[]): string[] {
@@ -548,20 +636,31 @@ function tokensBusquedaSap(descNorm: string): string[] {
 // Detecta el sustantivo principal de la pieza. Si la solicitud pide uno concreto,
 // se descartan candidatos cuyo sustantivo principal sea de OTRA familia incompatible.
 const FAMILIAS_PIEZA: Array<{ familia: string; tokens: string[] }> = [
-  { familia: 'tubo',      tokens: ['tubo', 'tuberia'] },
-  { familia: 'anillo_seg', tokens: ['arillo', 'aro seg', 'anillo seg', 'aro de seg', 'anillo de seg', 'circlip', 'seeger'] },
-  { familia: 'varilla',   tokens: ['varilla', 'redondo macizo', 'barra macizo'] },
-  { familia: 'puntera',   tokens: ['puntera'] },
-  { familia: 'codo',      tokens: ['codo'] },
-  { familia: 'brida',     tokens: ['brida'] },
-  { familia: 'machon',    tokens: ['machon', 'machón'] },
-  { familia: 'chapa',     tokens: ['chapa', 'plancha', 'lamina'] },
-  { familia: 'perfil',    tokens: ['perfil', 'angulo', 'pletina', 'plantilla'] },
-  { familia: 'valvula',   tokens: ['valvula', 'válvula'] },
-  { familia: 'malla',     tokens: ['malla', 'rejilla', 'electrosoldada', 'red inox'] },
-  { familia: 'racor',     tokens: ['racor', 'abrazadera'] },
+  { familia: 'tubo',        tokens: ['tubo', 'tuberia'] },
+  { familia: 'anillo_seg',  tokens: ['arillo', 'aro seg', 'anillo seg', 'aro de seg', 'anillo de seg', 'circlip', 'seeger'] },
+  { familia: 'varilla',     tokens: ['varilla', 'redondo macizo', 'barra macizo'] },
+  { familia: 'puntera',     tokens: ['puntera'] },
+  { familia: 'codo',        tokens: ['codo'] },
+  { familia: 'brida',       tokens: ['brida'] },
+  { familia: 'machon',      tokens: ['machon', 'machón'] },
+  { familia: 'chapa',       tokens: ['chapa', 'plancha', 'lamina'] },
+  { familia: 'perfil',      tokens: ['perfil', 'angulo', 'pletina', 'plantilla'] },
+  { familia: 'valvula',     tokens: ['valvula', 'válvula'] },
+  { familia: 'malla',       tokens: ['malla', 'rejilla', 'electrosoldada', 'red inox'] },
+  { familia: 'racor',       tokens: ['racor', 'abrazadera'] },
   { familia: 'tornilleria', tokens: ['tornillo', 'tuerca', 'arandela', 'esparrago', 'allen', 'd-933', 'd-912', 'd-934'] },
-  { familia: 'llave',     tokens: ['llave de vaso', 'vaso', 'carraca', 'llave'] },
+  { familia: 'llave',       tokens: ['llave de vaso', 'vaso', 'carraca', 'llave'] },
+  // ── Mantenimiento / repuestos ──
+  // rodamiento y chumacera van en la misma familia para no excluirse mutuamente
+  { familia: 'rodamiento',  tokens: ['rodamiento', 'rodto', 'cojinete', 'chumacera', 'ucp', 'ucf', 'ucfl'] },
+  // retén/sello: tokens multi-palabra para evitar falsos positivos
+  { familia: 'reten',       tokens: ['sello aceite', 'sello mecanico', 'reten aceite', 'labio de aceite', 'reten de aceite'] },
+  // correa de transmisión (diferente de banda transportadora)
+  { familia: 'correa_v',    tokens: ['correa trapez', 'v-belt', 'vbelt', 'correa de transmision', 'correa trapezoidal'] },
+  // piñón / sprocket / engranaje
+  { familia: 'piñon',       tokens: ['sprocket', 'piñon', 'pinon', 'corona dentada', 'rueda dentada'] },
+  // filtros industriales
+  { familia: 'filtro',      tokens: ['filtro aceite', 'filtro hidraulico', 'filtro linea', 'elemento filtrante'] },
 ]
 
 function detectarFamilia(texto: string): string | null {
@@ -1072,22 +1171,30 @@ export function ejecutarAlgoritmo(descripcion: string, db: DbData, variantesBusq
 function inferirCategoria(descNorm: string): string {
   const mapaCategorias: Array<{ keywords: string[]; categoria: string }> = [
     { keywords: ['vaso hexagonal', 'llave de vaso', 'carraca', 'destornillador', 'llave fija', 'llave allen'], categoria: 'HERRAMIENTA MANUAL' },
+    { keywords: ['chumacera', 'ucp', 'ucf', 'ucfl', 'soporte rodamiento'], categoria: 'RODAMIENTOS' },
     { keywords: ['rodamiento', 'cojinete', 'bearing'], categoria: 'RODAMIENTOS' },
-    { keywords: ['banda', 'correa transportadora', 'conveyor'], categoria: 'BANDAS TRANSPORTADORAS' },
+    { keywords: ['banda transportadora', 'correa transportadora', 'conveyor', 'cinta transportadora'], categoria: 'BANDAS TRANSPORTADORAS' },
     { keywords: ['motoreductor', 'motorreductor', 'reductor', 'motovario', 'motor electrico', 'motor trifasico'], categoria: 'MOTORES' },
     { keywords: ['contactor', 'rele', 'magnetotermico', 'disyuntor', 'interruptor', 'pulsador', 'variador', 'inverter', 'servo'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
-    { keywords: ['sensor', 'detector', 'encoder', 'fotocelula', 'fotocélula'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
+    { keywords: ['sensor', 'detector', 'encoder', 'fotocelula', 'final de carrera', 'limit switch'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
     { keywords: ['cable', 'manguera electrica', 'hilo electrico'], categoria: 'ELECTRICIDAD / AUTOMATIZACIÓN' },
     { keywords: ['bomba', 'centrifuga', 'peristaltica'], categoria: 'BOMBAS' },
-    { keywords: ['neumatica', 'cilindro', 'valvula neumatica', 'compresor'], categoria: 'NEUMÁTICA' },
-    { keywords: ['hidraulica', 'latiguillo', 'manguito hidraulico'], categoria: 'HIDRÁULICA' },
+    { keywords: ['electrovalvula', 'solenoide', 'valvula neumatica'], categoria: 'NEUMÁTICA' },
+    { keywords: ['neumatica', 'cilindro neumatico', 'actuador neumatico', 'compresor'], categoria: 'NEUMÁTICA' },
+    { keywords: ['hidraulica', 'latiguillo', 'manguito hidraulico', 'cilindro hidraulico'], categoria: 'HIDRÁULICA' },
     { keywords: ['tornillo', 'tuerca', 'arandela', 'ferreteria', 'perno', 'hexagonal'], categoria: 'FERRETERÍA' },
-    { keywords: ['cadena', 'piñon', 'sprocket', 'rexnord'], categoria: 'TRANSMISIÓN MECÁNICA' },
+    { keywords: ['correa trapez', 'v-belt', 'vbelt', 'correa de transmision', 'correa trapezoidal'], categoria: 'TRANSMISIÓN MECÁNICA' },
+    { keywords: ['cadena', 'piñon', 'sprocket', 'rexnord', 'corona dentada', 'engranaje'], categoria: 'TRANSMISIÓN MECÁNICA' },
+    { keywords: ['polea', 'tambor', 'rodillo', 'rolete'], categoria: 'TRANSMISIÓN MECÁNICA' },
     { keywords: ['lubricante', 'aceite', 'grasa'], categoria: 'LUBRICANTES' },
     { keywords: ['etiqueta', 'marcaje', 'impresora', 'tinta', 'ribbon'], categoria: 'MARCAJE' },
     { keywords: ['valvula bola', 'valvula', 'purgador'], categoria: 'VÁLVULAS' },
-    { keywords: ['junta', 'reten', 'o-ring', 'viton', 'nbr', 'epdm'], categoria: 'HIDRÁULICA / JUNTAS' },
+    { keywords: ['sello aceite', 'sello mecanico', 'reten', 'retén', 'labio'], categoria: 'RETENES / SELLOS' },
+    { keywords: ['junta', 'empaquetadura', 'o-ring', 'viton', 'nbr', 'epdm'], categoria: 'JUNTAS / ESTANQUEIDAD' },
+    { keywords: ['filtro aceite', 'filtro hidraulico', 'filtro linea', 'elemento filtrante'], categoria: 'HIDRÁULICA' },
     { keywords: ['tubo pvc', 'pvc', 'fontaneria', 'grifo'], categoria: 'FONTANERÍA / PVC' },
+    { keywords: ['manometro', 'presostato', 'caudalimetro', 'termometro', 'termopar'], categoria: 'INSTRUMENTACIÓN' },
+    { keywords: ['casquillo', 'buje', 'manguito', 'casqui'], categoria: 'RODAMIENTOS' },
   ]
 
   for (const entry of mapaCategorias) {
