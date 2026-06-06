@@ -77,6 +77,12 @@ export interface Recomendacion {
 
 export type TipoMatch = 'EXACTO' | 'PARCIAL' | 'EQUIVALENTE' | 'SIN_MATCH'
 
+export interface FichaTecnica {
+  descripcion: string   // qué es en 1 frase
+  uso: string           // para qué sirve y dónde se monta
+  datos_clave: string[] // specs principales (medida, material, potencia…)
+}
+
 export interface SapSugeridoUI {
   codigo: string
   descripcion: string
@@ -97,6 +103,7 @@ export interface RecomendacionNueva {
   codigos_sap_sugeridos: SapSugeridoUI[]
   nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
   tipoMatch?: TipoMatch   // calidad del match de búsqueda en BD
+  ficha_tecnica?: FichaTecnica
   motivo: string
   observaciones: string
   seleccionado: boolean

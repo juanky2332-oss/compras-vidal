@@ -121,11 +121,11 @@ CÓMO FUNCIONA LA BÚSQUEDA (igual que un comprador experto en SAP):
 3) El motor ya ha buscado con varias abreviaturas/sinónimos y te da hasta 5 SAPs candidatos.
 4) Tu trabajo es DEVOLVER ESOS CANDIDATOS para que el usuario elija uno. NO elijas tú uno solo: presenta todos los que el motor encontró (hasta 5), del más parecido al menos.
 
-CAMPO tipo_match — indica cómo de bien se ha encontrado el material:
-• "EXACTO": hay SAP con referencia/medida/potencia exacta o prácticamente idéntica
-• "PARCIAL": hay SAP de la misma familia/tipo pero sin coincidencia exacta de medida o potencia (p.ej. motor de potencia cercana, rodamiento de serie similar)
-• "EQUIVALENTE": el material solicitado no está en la BD con ese código/medida exactos, pero se propone un equivalente técnico válido por características (misma función, misma potencia equivalente kW/CV, mismos polos/rpm, compatible dimensionalmente)
-• "SIN_MATCH": no hay datos suficientes para encontrar ni equivalente; se necesita más información
+CAMPO tipo_match — indica la exactitud de la coincidencia de REFERENCIA / CÓDIGO / MEDIDA / POTENCIA (NO de tipo de artículo):
+• "EXACTO": la referencia, código, medida o potencia del artículo solicitado existe LITERALMENTE en la BD SAP. Ej: piden "6204-2RS" → hay SAP con "6204-2RS" en la descripción; piden "1,5 kW 4 polos" → hay SAP con exactamente 1,5 kW 4 polos; piden "DN50 PN16" → hay SAP con exactamente DN50 PN16.
+• "PARCIAL": hay SAP con referencia o medida MUY CERCANA pero NO idéntica. Ej: piden "6204-2RS" y hay "6204-2Z" (misma serie, tapa diferente); piden "DN50 PN16" y hay "DN50 PN10"; piden "1,5 kW" y hay "1,1 kW". El comprador debe verificar antes de pedir.
+• "EQUIVALENTE": no hay referencia/código/medida exacta NI cercana en la BD, pero existe artículo con características funcionales equivalentes (misma función, potencia equivalente kW/CV, compatible dimensionalmente). No es que sea "del mismo tipo" — es que NO hay código/referencia exacta y se propone funcional.
+• "SIN_MATCH": sin datos suficientes para match de ningún tipo — se necesita más información del solicitante.
 
 EQUIVALENCIAS DE PROVEEDOR (aplícalas en silencio, NO las expliques):
 • 100025296 (BERDIN MURCIA) = 100035845 (BERDIN LEVANTE): usa 100035845.
@@ -159,6 +159,11 @@ SALIDA JSON ESTRICTO (sin texto antes ni después):
   "tipo_material": "string",
   "marca_detectada": "string (o 'no especificada')",
   "tipo_match": "EXACTO | PARCIAL | EQUIVALENTE | SIN_MATCH",
+  "ficha_tecnica": {
+    "descripcion": "string — qué es exactamente este artículo en 1 frase técnica (ej: 'Rodamiento rígido de bolas doble sello, serie 6200')",
+    "uso": "string — para qué sirve y dónde se monta típicamente en planta alimentaria (1 frase concisa)",
+    "datos_clave": ["spec1", "spec2", "spec3"]
+  },
   "proveedor_recomendado": { "nombre": "string", "codigo": "string" },
   "alternativas": [ { "nombre": "string", "codigo": "string", "nota": "string opcional" } ],
   "codigos_sap_sugeridos": [ { "codigo": "string", "descripcion": "string", "proveedor": "string", "nota": "string opcional (medida no exacta, verificar...)" } ],
@@ -181,6 +186,7 @@ interface RecomendacionNueva {
   codigos_sap_sugeridos: SapSugeridoOut[]
   nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
   tipoMatch?: 'EXACTO' | 'PARCIAL' | 'EQUIVALENTE' | 'SIN_MATCH'
+  ficha_tecnica?: { descripcion: string; uso: string; datos_clave: string[] }
   motivo: string
   observaciones: string
   seleccionado: boolean
@@ -295,6 +301,13 @@ INSTRUCCIONES:
     ? (tipoMatchRaw as 'EXACTO' | 'PARCIAL' | 'EQUIVALENTE' | 'SIN_MATCH')
     : undefined
 
+  const fichaRaw = parsed.ficha_tecnica as { descripcion?: unknown; uso?: unknown; datos_clave?: unknown } | undefined
+  const fichaTecnica = fichaRaw ? {
+    descripcion: String(fichaRaw.descripcion || ''),
+    uso: String(fichaRaw.uso || ''),
+    datos_clave: Array.isArray(fichaRaw.datos_clave) ? fichaRaw.datos_clave.map((d) => String(d)) : [],
+  } : undefined
+
   return {
     cantidad: material.cantidad,
     material_detectado: `${material.cantidad}x ${material.descripcion}`,
@@ -307,6 +320,7 @@ INSTRUCCIONES:
     codigos_sap_sugeridos: sapsLimpios,
     nivel_confianza: (parsed.nivel_confianza as 'ALTO' | 'MEDIO' | 'BAJO') || (resultado.pasoDeterminante <= 3 ? 'ALTO' : resultado.pasoDeterminante === 4 ? 'MEDIO' : 'BAJO'),
     tipoMatch: tipoMatchValido,
+    ficha_tecnica: fichaTecnica,
     motivo: limpiarTextoInterno(String(parsed.motivo || '')),
     observaciones: limpiarTextoInterno(String(parsed.observaciones || '')),
     seleccionado: true,

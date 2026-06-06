@@ -19,10 +19,10 @@ const CONFIDENCE_CONFIG = {
 }
 
 const MATCH_CONFIG: Record<TipoMatch, { label: string; Icon: typeof Target; style: string; title: string }> = {
-  EXACTO:     { label: 'Match exacto',      Icon: Target,     style: 'bg-emerald-500/12 text-emerald-300/90 border-emerald-500/25', title: 'Artículo encontrado con referencia exacta en la base de datos' },
-  PARCIAL:    { label: 'Artículo similar',  Icon: GitCompare, style: 'bg-sky-500/12     text-sky-300/90     border-sky-500/25',     title: 'Artículo similar — verifica medida/referencia exacta' },
-  EQUIVALENTE:{ label: 'Equiv. técnico',    Icon: Puzzle,     style: 'bg-violet-500/12  text-violet-300/90  border-violet-500/25',  title: 'No hay SAP exacto — se propone equivalente técnico por características' },
-  SIN_MATCH:  { label: 'Sin match directo', Icon: HelpCircle, style: 'bg-red-500/10     text-red-300/80     border-red-500/20',     title: 'Sin artículo ni equivalente claro — confirma con el responsable' },
+  EXACTO:     { label: 'Referencia exacta', Icon: Target,     style: 'bg-emerald-500/12 text-emerald-300/90 border-emerald-500/25', title: 'La referencia, código o medida exacta del artículo solicitado existe literalmente en la base de datos SAP' },
+  PARCIAL:    { label: 'Ref. cercana',      Icon: GitCompare, style: 'bg-sky-500/12     text-sky-300/90     border-sky-500/25',     title: 'Medida o referencia muy cercana pero no idéntica (ej: 6204-2RS vs 6204-2Z, DN50 PN16 vs DN50 PN10) — verifica antes de pedir' },
+  EQUIVALENTE:{ label: 'Equiv. técnico',    Icon: Puzzle,     style: 'bg-violet-500/12  text-violet-300/90  border-violet-500/25',  title: 'Sin código/referencia exacta en BD — se propone equivalente técnico con características funcionales equivalentes' },
+  SIN_MATCH:  { label: 'Sin coincidencia',  Icon: HelpCircle, style: 'bg-red-500/10     text-red-300/80     border-red-500/20',     title: 'Sin artículo ni equivalente claro — se necesita más información del solicitante' },
 }
 
 const PASO_LABELS: Record<number, { label: string; color: string }> = {
@@ -145,6 +145,7 @@ export default function MaterialCard({ rec, sel, index, onToggle, onSelChange, p
           <SapSelector
             saps={saps}
             selected={sel.sapElegido}
+            selectedDescripcion={sel.sapDescripcion}
             onChange={(codigo, descripcion, aproximado) =>
               onSelChange({ sapElegido: codigo, sapDescripcion: descripcion, sapAproximado: aproximado })
             }
@@ -239,8 +240,11 @@ function ProveedorSelector({
             <Building2 className="w-3.5 h-3.5 text-white/25 shrink-0" />
             <span className="text-sm text-white/85 font-medium flex-1 text-left truncate">{o.nombre}</span>
             <code className="text-[10px] text-white/30 font-mono shrink-0">{o.codigo}</code>
-            <span className="text-[9px] uppercase tracking-wide shrink-0"
-              style={{ color: i === 0 ? 'rgba(167,139,250,0.7)' : 'rgba(255,255,255,0.25)' }}>
+            <span
+              className="text-[9px] uppercase tracking-wide shrink-0"
+              style={{ color: i === 0 ? 'rgba(167,139,250,0.7)' : 'rgba(255,255,255,0.25)' }}
+              title={i === 0 ? 'Proveedor principal recomendado por la IA según historial de compras' : 'Proveedor alternativo sugerido por la IA'}
+            >
               {i === 0 ? 'IA' : 'alt'}
             </span>
           </button>
@@ -256,7 +260,10 @@ function ProveedorSelector({
             <Building2 className="w-3.5 h-3.5 text-white/25 shrink-0" />
             <span className="text-sm text-white/85 font-medium flex-1 truncate">{selectedExterno.nombre}</span>
             <code className="text-[10px] text-white/30 font-mono shrink-0">{selectedExterno.codigo}</code>
-            <span className="text-[9px] text-white/30 uppercase tracking-wide shrink-0">manual</span>
+            <span
+              className="text-[9px] text-white/30 uppercase tracking-wide shrink-0"
+              title="Proveedor seleccionado manualmente — no estaba en las sugerencias de la IA"
+            >manual</span>
           </div>
         )}
 
@@ -325,10 +332,12 @@ function ProveedorSelector({
 function SapSelector({
   saps,
   selected,
+  selectedDescripcion,
   onChange,
 }: {
   saps: RecomendacionNueva['codigos_sap_sugeridos']
   selected: string
+  selectedDescripcion?: string
   onChange: (codigo: string, descripcion: string, aproximado: boolean) => void
 }) {
   const [mostrarTodos, setMostrarTodos] = useState(false)
@@ -345,6 +354,11 @@ function SapSelector({
 
   const visibles = mostrarTodos ? saps : saps.slice(0, 3)
   const ninguno = selected === ''
+  // SAP seleccionado desde la búsqueda libre (no está en la lista de sugerencias)
+  const selectedEnLista = saps.some(s => s.codigo === selected)
+  const selectedExterno = selected && !selectedEnLista && selected !== ''
+    ? { codigo: selected, descripcion: selectedDescripcion || '' }
+    : null
 
   function buscarSAP(query: string) {
     setBusqSAP(query)
@@ -372,6 +386,29 @@ function SapSelector({
       </p>
 
       <div className="space-y-1.5">
+        {/* SAP seleccionado manualmente (no estaba en la lista de sugerencias) */}
+        {selectedExterno && (
+          <div
+            className="flex items-start gap-3 px-3.5 py-2.5 rounded-xl border"
+            style={{ background: 'rgba(99,102,241,0.10)', borderColor: 'rgba(99,102,241,0.35)' }}
+          >
+            <RadioDot active color="indigo" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <code className="text-sm font-mono font-medium text-indigo-300/85">{selectedExterno.codigo}</code>
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase"
+                  style={{ background: 'rgba(139,92,246,0.15)', color: 'rgba(167,139,250,0.80)', border: '1px solid rgba(139,92,246,0.25)' }}
+                  title="Código SAP buscado y seleccionado manualmente — no estaba en la lista de sugerencias"
+                >manual</span>
+              </div>
+              {selectedExterno.descripcion && (
+                <p className="text-xs text-white/45 mt-0.5 leading-snug">{selectedExterno.descripcion}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {visibles.map((sap) => {
           const esCatalogo = !sap.proveedor && !!sap.nota?.includes('sin historial')
           return (

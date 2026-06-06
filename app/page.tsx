@@ -16,6 +16,9 @@ import {
   CheckCheck,
   FileText,
   X,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 
 type Paso = 'ocr' | 'extraccion' | 'busqueda' | 'razonamiento' | null
@@ -57,6 +60,8 @@ export default function HomePage() {
   const [solicitudCompra, setSolicitudCompra] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [consultas, setConsultas] = useState<string[]>([])
+  const [consultaActual, setConsultaActual] = useState<string>('')
+  const [solicitudExpandida, setSolicitudExpandida] = useState(false)
 
   useEffect(() => {
     fetch('/api/dbstats').then(r => r.json()).then(setDbStats).catch(() => {})
@@ -99,6 +104,7 @@ export default function HomePage() {
         const consulta = [texto, ocrTexto].filter(Boolean).join('\n').trim()
         if (!consulta) throw new Error('No se pudo extraer texto de la entrada')
 
+        setConsultaActual(consulta)
         const extRes = await fetch('/api/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ consulta }) })
         if (!extRes.ok) throw new Error('Error en extracción de materiales')
         const extData = await extRes.json()
@@ -155,6 +161,8 @@ export default function HomePage() {
     setSelecciones([])
     setLog([])
     setError(null)
+    setConsultaActual('')
+    setSolicitudExpandida(false)
   }
 
   const PASOS_INFO = {
@@ -174,7 +182,7 @@ export default function HomePage() {
 
       <Header marcas={dbStats.marcas} proveedores={dbStats.proveedores} saps={dbStats.saps} />
 
-      <main className="relative max-w-4xl mx-auto px-5 pt-20 pb-20">
+      <main className="relative max-w-4xl lg:max-w-[1160px] mx-auto px-5 pt-20 pb-20">
 
         {/* Welcome */}
         {recomendaciones.length === 0 && !cargando && (
@@ -230,10 +238,47 @@ export default function HomePage() {
 
         {/* ── RESULTADOS ─────────────────────────────────────────── */}
         {recomendaciones.length > 0 && (
-          <div className="mt-8 space-y-4">
+          <div className="mt-8">
+
+            {/* Solicitud original — persiste para no perder el contexto */}
+            {consultaActual && (
+              <div
+                className="mb-5 rounded-xl overflow-hidden"
+                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+              >
+                <button
+                  onClick={() => setSolicitudExpandida(v => !v)}
+                  className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-white/25 uppercase tracking-widest mb-1 font-semibold">Solicitud analizada</p>
+                    {/* Chips de artículos identificados */}
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {recomendaciones.map((rec, i) => {
+                        const label = rec.tipo_material && rec.tipo_material !== 'No clasificado'
+                          ? rec.tipo_material
+                          : rec.material_detectado.replace(/^\d+x\s*/, '')
+                        return (
+                          <span key={i}
+                            className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                            style={{ background: 'rgba(99,102,241,0.12)', color: 'rgba(165,180,252,0.85)', border: '1px solid rgba(99,102,241,0.20)' }}
+                          >{label}</span>
+                        )
+                      })}
+                    </div>
+                    <p className={`text-xs text-white/40 leading-relaxed ${solicitudExpandida ? '' : 'line-clamp-2'}`}>
+                      {consultaActual}
+                    </p>
+                  </div>
+                  <span className="text-white/20 shrink-0 mt-1">
+                    {solicitudExpandida ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Barra de resumen */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold text-white/80">
                   {recomendaciones.length} material{recomendaciones.length > 1 ? 'es' : ''} analizados
@@ -260,53 +305,100 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Tarjetas — cada una gestiona su propia selección SAP + proveedor */}
-            {recomendaciones.map((rec, i) => {
-              const sel = selecciones.find(s => s.indice === i)
-              if (!sel) return null
-              return (
-                <MaterialCard
-                  key={i}
-                  rec={rec}
-                  sel={sel}
-                  index={i}
-                  onToggle={handleToggle}
-                  onSelChange={(cambios) => actualizarSeleccion(i, cambios)}
-                  proveedoresDB={proveedoresDB}
-                />
-              )
-            })}
+            {/* Layout: tarjetas (izq) + fichas técnicas (der) */}
+            <div className="lg:flex lg:gap-5 lg:items-start">
 
-            {/* ── Nº Solicitud de Compra + Export ──────────────── */}
-            {incluidas.length > 0 && (
-              <div className="mt-6 space-y-3">
-                {/* Campo SC */}
-                <div
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl"
-                  style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.15)' }}
-                >
-                  <FileText className="w-4 h-4 text-indigo-400/60 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-indigo-300/50 uppercase tracking-widest mb-0.5">Nº Solicitud de Compra (SC)</p>
-                    <input
-                      type="text"
-                      value={solicitudCompra}
-                      onChange={e => setSolicitudCompra(e.target.value)}
-                      placeholder="Pega aquí el nº de solicitud SAP… ej: 1000012345"
-                      className="w-full text-sm text-white/80 bg-transparent placeholder-white/20 outline-none"
+              {/* ── Columna izquierda: tarjetas + export ─────────── */}
+              <div className="flex-1 min-w-0 space-y-4">
+                {recomendaciones.map((rec, i) => {
+                  const sel = selecciones.find(s => s.indice === i)
+                  if (!sel) return null
+                  return (
+                    <MaterialCard
+                      key={i}
+                      rec={rec}
+                      sel={sel}
+                      index={i}
+                      onToggle={handleToggle}
+                      onSelChange={(cambios) => actualizarSeleccion(i, cambios)}
+                      proveedoresDB={proveedoresDB}
                     />
-                  </div>
-                  {solicitudCompra && (
-                    <button onClick={() => setSolicitudCompra('')} className="text-white/25 hover:text-white/50 shrink-0 transition-colors">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+                  )
+                })}
 
-                {/* Export */}
-                <ExportSAP selecciones={selecciones} solicitudCompra={solicitudCompra} />
+                {/* ── Nº Solicitud de Compra + Export ────────── */}
+                {incluidas.length > 0 && (
+                  <div className="mt-6 space-y-3">
+                    <div
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                      style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.15)' }}
+                    >
+                      <FileText className="w-4 h-4 text-indigo-400/60 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] text-indigo-300/50 uppercase tracking-widest mb-0.5">Nº Solicitud de Compra (SC)</p>
+                        <input
+                          type="text"
+                          value={solicitudCompra}
+                          onChange={e => setSolicitudCompra(e.target.value)}
+                          placeholder="Pega aquí el nº de solicitud SAP… ej: 1000012345"
+                          className="w-full text-sm text-white/80 bg-transparent placeholder-white/20 outline-none"
+                        />
+                      </div>
+                      {solicitudCompra && (
+                        <button onClick={() => setSolicitudCompra('')} className="text-white/25 hover:text-white/50 shrink-0 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <ExportSAP selecciones={selecciones} solicitudCompra={solicitudCompra} />
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* ── Columna derecha: fichas técnicas (sticky) ─────── */}
+              <div className="hidden lg:block w-56 shrink-0">
+                <div className="sticky top-24 space-y-3">
+                  <div className="flex items-center gap-2 px-1 mb-1">
+                    <BookOpen className="w-3 h-3 text-white/20" />
+                    <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold">Fichas técnicas</p>
+                  </div>
+                  {recomendaciones.map((rec, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl p-3 space-y-2"
+                      style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}
+                    >
+                      {/* Nombre / tipo */}
+                      <p className="text-[11px] font-semibold text-white/70 leading-snug">
+                        {rec.tipo_material && rec.tipo_material !== 'No clasificado'
+                          ? rec.tipo_material
+                          : rec.material_detectado.replace(/^\d+x\s*/, '')}
+                      </p>
+
+                      {rec.ficha_tecnica ? (
+                        <>
+                          <p className="text-[11px] text-white/48 leading-relaxed">{rec.ficha_tecnica.descripcion}</p>
+                          <p className="text-[10px] text-white/32 leading-relaxed italic">{rec.ficha_tecnica.uso}</p>
+                          {rec.ficha_tecnica.datos_clave.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {rec.ficha_tecnica.datos_clave.map((d, di) => (
+                                <span key={di}
+                                  className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                                  style={{ background: 'rgba(99,102,241,0.10)', color: 'rgba(165,180,252,0.65)', border: '1px solid rgba(99,102,241,0.15)' }}
+                                >{d}</span>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-white/22 italic">{rec.motivo?.slice(0, 100) || 'Analizando…'}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
 
