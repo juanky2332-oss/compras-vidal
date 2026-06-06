@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import {
@@ -14,8 +14,12 @@ import {
   Lightbulb,
   Tag,
   Layers,
+  Target,
+  GitCompare,
+  Puzzle,
+  HelpCircle,
 } from 'lucide-react'
-import type { RecomendacionNueva } from '@/lib/types'
+import type { RecomendacionNueva, TipoMatch } from '@/lib/types'
 
 interface MaterialCardProps {
   rec: RecomendacionNueva
@@ -53,6 +57,33 @@ const CONFIDENCE_CONFIG = {
   },
 }
 
+const MATCH_CONFIG: Record<TipoMatch, { label: string; icon: typeof Target; style: string; title: string }> = {
+  EXACTO: {
+    label: 'Match exacto',
+    icon: Target,
+    style: 'bg-emerald-500/12 text-emerald-300/90 border-emerald-500/25',
+    title: 'Artículo encontrado con referencia/medida exacta en la base de datos',
+  },
+  PARCIAL: {
+    label: 'Artículo similar',
+    icon: GitCompare,
+    style: 'bg-sky-500/12 text-sky-300/90 border-sky-500/25',
+    title: 'Artículo similar encontrado — la medida o referencia puede no ser idéntica, verifica antes de pedir',
+  },
+  EQUIVALENTE: {
+    label: 'Equivalente técnico',
+    icon: Puzzle,
+    style: 'bg-violet-500/12 text-violet-300/90 border-violet-500/25',
+    title: 'No hay SAP con esa referencia exacta — se propone equivalente técnico por características (potencia, tipo, dimensiones)',
+  },
+  SIN_MATCH: {
+    label: 'Sin match directo',
+    icon: HelpCircle,
+    style: 'bg-red-500/10 text-red-300/80 border-red-500/20',
+    title: 'No se encontró artículo ni equivalente claro — confirma con el responsable antes de pedir',
+  },
+}
+
 const PASO_LABELS: Record<number, { label: string; color: string }> = {
   1: { label: 'Marca reconocida', color: 'text-violet-400/65' },
   2: { label: 'Tipo de material', color: 'text-indigo-400/65' },
@@ -71,6 +102,7 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
   const tieneObservaciones = !!rec.observaciones?.trim()
   const paso = PASO_LABELS[rec._pasoDeterminante] || PASO_LABELS[5]
   const hayDetalle = tieneAlternativas || tieneSAPs || tieneObservaciones
+  const matchCfg = rec.tipoMatch ? MATCH_CONFIG[rec.tipoMatch] : null
 
   return (
     <div
@@ -100,15 +132,26 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
           </button>
 
           <div className="flex-1 min-w-0 space-y-2.5">
-            {/* Nombre + badge confianza */}
+            {/* Nombre + badges */}
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-base font-semibold text-white/92 leading-snug">
                 {rec.material_detectado}
               </h3>
-              <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border flex-shrink-0 ${cfg.badge}`}>
-                <ConfIcon className="w-3 h-3" />
-                {cfg.label}
-              </span>
+              <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                {matchCfg && (
+                  <span
+                    className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${matchCfg.style}`}
+                    title={matchCfg.title}
+                  >
+                    <matchCfg.icon className="w-2.5 h-2.5" />
+                    {matchCfg.label}
+                  </span>
+                )}
+                <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${cfg.badge}`}>
+                  <ConfIcon className="w-3 h-3" />
+                  {cfg.label}
+                </span>
+              </div>
             </div>
 
             {/* Tipo + Marca */}
@@ -218,7 +261,7 @@ export default function MaterialCard({ rec, index, onToggle }: MaterialCardProps
                     )}
                   </div>
                   <div className="space-y-2">
-                    {rec.codigos_sap_sugeridos.slice(0, 4).map((sap, i) => {
+                    {rec.codigos_sap_sugeridos.slice(0, 5).map((sap, i) => {
                       const esCatalogo = !sap.proveedor && !!sap.nota?.includes('sin historial')
                       return (
                         <div

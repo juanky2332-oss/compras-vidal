@@ -75,6 +75,8 @@ export interface Recomendacion {
 
 // ── Tipos nuevos del motor v2 ──
 
+export type TipoMatch = 'EXACTO' | 'PARCIAL' | 'EQUIVALENTE' | 'SIN_MATCH'
+
 export interface SapSugeridoUI {
   codigo: string
   descripcion: string
@@ -94,6 +96,7 @@ export interface RecomendacionNueva {
   alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
   codigos_sap_sugeridos: SapSugeridoUI[]
   nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
+  tipoMatch?: TipoMatch   // calidad del match de búsqueda en BD
   motivo: string
   observaciones: string
   seleccionado: boolean

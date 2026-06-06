@@ -39,6 +39,7 @@ export default function HomePage() {
   const [log, setLog] = useState<LogEntry[]>([])
   const [recomendaciones, setRecomendaciones] = useState<RecomendacionNueva[]>([])
   const [selecciones, setSelecciones] = useState<SeleccionPedido[]>([])
+  const [solicitudCompra, setSolicitudCompra] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [consultas, setConsultas] = useState<string[]>([])
 
@@ -295,12 +296,14 @@ export default function HomePage() {
                 selecciones={selecciones}
                 onChange={setSelecciones}
                 proveedoresDB={proveedoresDB}
+                solicitudCompra={solicitudCompra}
+                onSolicitudChange={setSolicitudCompra}
               />
             </div>
 
             {/* Pedido final listo para copiar/pegar */}
             <div className="mt-4">
-              <ExportSAP selecciones={selecciones} />
+              <ExportSAP selecciones={selecciones} solicitudCompra={solicitudCompra} />
             </div>
           </div>
         )}

@@ -13,6 +13,7 @@ import {
   CheckSquare,
   Square,
   X,
+  FileText,
 } from 'lucide-react'
 import type { RecomendacionNueva, SeleccionPedido, ProveedorSimple, SapSearchResult } from '@/lib/types'
 
@@ -21,6 +22,8 @@ interface PedidoBuilderProps {
   selecciones: SeleccionPedido[]
   onChange: (selecciones: SeleccionPedido[]) => void
   proveedoresDB?: ProveedorSimple[]
+  solicitudCompra?: string
+  onSolicitudChange?: (v: string) => void
 }
 
 export function construirSeleccionInicial(
@@ -45,7 +48,14 @@ export function construirSeleccionInicial(
   })
 }
 
-export default function PedidoBuilder({ recomendaciones, selecciones, onChange, proveedoresDB = [] }: PedidoBuilderProps) {
+export default function PedidoBuilder({
+  recomendaciones,
+  selecciones,
+  onChange,
+  proveedoresDB = [],
+  solicitudCompra = '',
+  onSolicitudChange,
+}: PedidoBuilderProps) {
   const [abierto, setAbierto] = useState(true)
 
   const proveedoresDisponibles = useMemo(() => {
@@ -74,7 +84,7 @@ export default function PedidoBuilder({ recomendaciones, selecciones, onChange, 
   if (recomendaciones.length === 0) return null
 
   return (
-    // ⚠ overflow-visible es crítico: sin él los dropdowns absolutos quedan cortados
+    // overflow-visible es crítico: sin él los dropdowns absolutos quedan cortados
     <div className="glass rounded-2xl border border-violet-500/15" style={{ overflow: 'visible' }}>
       <button
         onClick={() => setAbierto(!abierto)}
@@ -87,6 +97,7 @@ export default function PedidoBuilder({ recomendaciones, selecciones, onChange, 
             <h3 className="text-sm font-semibold text-white/85">Configurar pedido</h3>
             <p className="text-xs text-white/35 mt-0.5">
               Elige SAP y proveedor por línea · {incluidos} incluida{incluidos !== 1 ? 's' : ''}
+              {solicitudCompra && <span className="ml-2 text-indigo-400/60">· SC {solicitudCompra}</span>}
             </p>
           </div>
         </div>
@@ -95,6 +106,34 @@ export default function PedidoBuilder({ recomendaciones, selecciones, onChange, 
 
       {abierto && (
         <div className="p-4 space-y-3">
+          {/* Campo Solicitud de Compra */}
+          <div
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl"
+            style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.15)' }}
+          >
+            <FileText className="w-4 h-4 text-indigo-400/60 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <label className="text-[10px] text-indigo-300/50 uppercase tracking-widest block mb-1">
+                Nº Solicitud de Compra (SC)
+              </label>
+              <input
+                type="text"
+                value={solicitudCompra}
+                onChange={(e) => onSolicitudChange?.(e.target.value)}
+                placeholder="Pega aquí el nº de solicitud de SAP… ej: 1000012345"
+                className="w-full text-sm text-white/80 bg-transparent placeholder-white/20 outline-none"
+              />
+            </div>
+            {solicitudCompra && (
+              <button
+                onClick={() => onSolicitudChange?.('')}
+                className="shrink-0 text-white/25 hover:text-white/50 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
           {proveedoresDisponibles.length > 1 && (
             <UnificarBar proveedores={proveedoresDisponibles} onUnificar={unificarTodo} />
           )}
@@ -126,11 +165,24 @@ function UnificarBar({
   onUnificar: (codigo: string, nombre: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
   return (
     <div className="relative flex items-center gap-2 p-3 rounded-xl bg-blue-500/[0.05] border border-blue-500/15">
       <Zap className="w-3.5 h-3.5 text-blue-400/70 shrink-0" />
       <span className="text-xs text-blue-400/60 flex-1">Unificar todas las líneas en un proveedor</span>
-      <div className="relative" style={{ zIndex: 60 }}>
+      <div ref={containerRef} className="relative" style={{ zIndex: 60 }}>
         <button
           onClick={() => setOpen(!open)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/15 border border-blue-500/25 text-blue-300 hover:bg-blue-500/25 transition-colors"
@@ -146,7 +198,7 @@ function UnificarBar({
             {proveedores.map((p) => (
               <button
                 key={p.codigo}
-                onClick={() => { onUnificar(p.codigo, p.nombre); setOpen(false) }}
+                onMouseDown={(e) => { e.preventDefault(); onUnificar(p.codigo, p.nombre); setOpen(false) }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
               >
                 <Building2 className="w-3 h-3 text-white/30 shrink-0" />
@@ -250,9 +302,21 @@ function SelectorSap({
   const [sapResultados, setSapResultados] = useState<SapSearchResult[]>([])
   const [buscando, setBuscando] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
-  // actual: SAP seleccionado si está en las sugerencias de la IA
-  // Si viene de búsqueda manual no estará en saps[], pero sapElegido y sapDescripcion lo tienen
+  const containerRef = useRef<HTMLDivElement>(null)
   const actual = saps.find((s) => s.codigo === sapElegido)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setBusqSAP('')
+        setSapResultados([])
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
 
   function buscarSAP(query: string) {
     setBusqSAP(query)
@@ -274,7 +338,7 @@ function SelectorSap({
   }
 
   return (
-    <div className="relative" style={{ overflow: 'visible' }}>
+    <div ref={containerRef} className="relative" style={{ overflow: 'visible' }}>
       <label className="text-[10px] text-white/30 uppercase tracking-wide mb-1 block">Código SAP</label>
       <button
         onClick={() => { setOpen(!open); setBusqSAP(''); setSapResultados([]) }}
@@ -283,14 +347,12 @@ function SelectorSap({
         <Hash className="w-3.5 h-3.5 text-indigo-400/50 shrink-0" />
         <div className="flex-1 min-w-0">
           {actual ? (
-            // SAP de las sugerencias IA
             <>
               <span className="text-xs font-mono text-indigo-300/90">{actual.codigo}</span>
               {actual.aproximado && <span className="ml-1 text-[10px] text-amber-400/70">~</span>}
               <p className="text-[10px] text-white/35 truncate">{actual.descripcion}</p>
             </>
           ) : sapElegido ? (
-            // SAP elegido desde búsqueda manual (no está en saps[] pero sapDescripcion lo tiene)
             <>
               <span className="text-xs font-mono text-indigo-300/90">{sapElegido}</span>
               {sapDescripcion && <p className="text-[10px] text-white/35 truncate">{sapDescripcion}</p>}
@@ -307,7 +369,6 @@ function SelectorSap({
           className="absolute left-0 top-full mt-1 w-full rounded-xl border border-white/10 bg-[#12121c] shadow-xl"
           style={{ zIndex: 999, minWidth: '260px' }}
         >
-          {/* Buscador SAP */}
           <div className="p-2 border-b border-white/[0.06]">
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08]">
               <Search className="w-3.5 h-3.5 text-indigo-400/50 shrink-0" />
@@ -320,14 +381,13 @@ function SelectorSap({
               />
               {buscando && <span className="text-[10px] text-indigo-400/50 animate-pulse">…</span>}
               {busqSAP && !buscando && (
-                <button onMouseDown={() => { setBusqSAP(''); setSapResultados([]) }}>
+                <button onMouseDown={(e) => { e.preventDefault(); setBusqSAP(''); setSapResultados([]) }}>
                   <X className="w-3 h-3 text-white/25 hover:text-white/50" />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Resultados de búsqueda o sugerencias IA */}
           <div className="max-h-64 overflow-y-auto py-1">
             {busqSAP.trim().length >= 2 ? (
               sapResultados.length > 0 ? (
@@ -368,7 +428,7 @@ function SelectorSap({
                 {saps.map((s, i) => (
                   <button
                     key={i}
-                    onClick={() => { onElegir(s.codigo, s.descripcion, s.aproximado === true); setOpen(false) }}
+                    onMouseDown={(e) => { e.preventDefault(); onElegir(s.codigo, s.descripcion, s.aproximado === true); setOpen(false) }}
                     className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors"
                   >
                     {s.codigo === sapElegido
@@ -387,7 +447,7 @@ function SelectorSap({
                   </button>
                 ))}
                 <button
-                  onClick={() => { onElegir('', '', false); setOpen(false) }}
+                  onMouseDown={(e) => { e.preventDefault(); onElegir('', '', false); setOpen(false) }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.06] transition-colors border-t border-white/[0.05]"
                 >
                   {sapElegido === ''
@@ -421,9 +481,9 @@ function SelectorProveedor({
 }) {
   const [open, setOpen] = useState(false)
   const [busq, setBusq] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sugerencias de la IA (principal + alternativas)
   const opcionesIA = useMemo(() => {
     const map = new Map<string, string>()
     if (rec.proveedor_recomendado?.codigo) {
@@ -435,7 +495,6 @@ function SelectorProveedor({
     return Array.from(map.entries()).map(([codigo, nombre]) => ({ codigo, nombre }))
   }, [rec])
 
-  // Filtrado client-side sobre todos los proveedores de la BD
   const filtrados: ProveedorSimple[] = busq.trim().length >= 2
     ? proveedoresDB
         .filter((p) => {
@@ -444,6 +503,19 @@ function SelectorProveedor({
         })
         .slice(0, 20)
     : []
+
+  // Cierra si se hace click fuera del componente — sin onBlur en el input
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setBusq('')
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 50)
@@ -456,7 +528,7 @@ function SelectorProveedor({
   }
 
   return (
-    <div className="relative" style={{ overflow: 'visible' }}>
+    <div ref={containerRef} className="relative" style={{ overflow: 'visible' }}>
       <label className="text-[10px] text-white/30 uppercase tracking-wide mb-1 block">Proveedor</label>
       <button
         onClick={() => { setOpen(!open); setBusq('') }}
@@ -475,7 +547,7 @@ function SelectorProveedor({
           className="absolute left-0 top-full mt-1 w-full rounded-xl border border-white/10 bg-[#12121c] shadow-xl"
           style={{ zIndex: 999, minWidth: '260px' }}
         >
-          {/* Campo de búsqueda */}
+          {/* Sin onBlur — el click-outside lo gestiona el useEffect de containerRef */}
           <div className="p-2 border-b border-white/[0.06]">
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08]">
               <Search className="w-3.5 h-3.5 text-white/30 shrink-0" />
@@ -483,26 +555,24 @@ function SelectorProveedor({
                 ref={inputRef}
                 value={busq}
                 onChange={(e) => setBusq(e.target.value)}
-                onBlur={() => setTimeout(() => setOpen(false), 180)}
                 placeholder="Buscar por nombre o código…"
                 className="flex-1 text-xs bg-transparent text-white/85 placeholder-white/25 outline-none"
               />
               {busq && (
-                <button onMouseDown={() => setBusq('')}>
+                <button onMouseDown={(e) => { e.preventDefault(); setBusq('') }}>
                   <X className="w-3 h-3 text-white/25 hover:text-white/50" />
                 </button>
               )}
             </div>
           </div>
 
-          <div className="max-h-60 overflow-y-auto py-1">
+          <div className="max-h-64 overflow-y-auto py-1">
             {busq.trim().length >= 2 ? (
-              /* Resultados del buscador (todos los 245) */
               filtrados.length > 0 ? (
                 filtrados.map((p) => (
                   <button
                     key={p.codigo}
-                    onMouseDown={() => elegir(p.codigo, p.nombre)}
+                    onMouseDown={(e) => { e.preventDefault(); elegir(p.codigo, p.nombre) }}
                     className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-white/[0.06] active:bg-white/10 transition-colors"
                   >
                     {p.codigo === proveedorCodigo
@@ -517,7 +587,6 @@ function SelectorProveedor({
                 <p className="text-xs text-white/30 px-3 py-2 italic">Sin resultados para &ldquo;{busq}&rdquo;</p>
               )
             ) : (
-              /* Sugerencias de la IA + separador */
               <>
                 {opcionesIA.length > 0 && (
                   <p className="text-[10px] text-white/25 uppercase tracking-widest px-3 pt-1.5 pb-0.5">Sugeridos por IA</p>
@@ -525,7 +594,7 @@ function SelectorProveedor({
                 {opcionesIA.map((o, i) => (
                   <button
                     key={i}
-                    onMouseDown={() => elegir(o.codigo, o.nombre)}
+                    onMouseDown={(e) => { e.preventDefault(); elegir(o.codigo, o.nombre) }}
                     className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-white/[0.06] transition-colors"
                   >
                     {o.codigo === proveedorCodigo

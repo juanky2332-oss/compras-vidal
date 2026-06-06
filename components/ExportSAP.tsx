@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Clipboard, Check, Building2, AlertCircle } from 'lucide-react'
+import { Clipboard, Check, Building2, AlertCircle, FileText } from 'lucide-react'
 import type { SeleccionPedido } from '@/lib/types'
 
 interface ExportSAPProps {
   selecciones: SeleccionPedido[]
+  solicitudCompra?: string
 }
 
 function cleanSap(sap: string | undefined | null): string {
@@ -16,15 +17,15 @@ function cleanSap(sap: string | undefined | null): string {
 }
 
 // TSV para pegar en SAP ME51N — empieza en columna Material
-// Columnas: Material | Txt.brv. | Ctd. | UM | T | Fe.entrega | Prc.neto | Mon. | por | CPP | Grp.art. | Centro | Almacén
-function buildLine(sel: SeleccionPedido): string {
+// Columnas: Material | Txt.brv. | Ctd. | UM | T | Fe.entrega | Prc.neto | Mon. | por | CPP | Grp.art. | Centro | Almacén | SC
+function buildLine(sel: SeleccionPedido, solicitudCompra?: string): string {
   const sap = cleanSap(sel.sapElegido)
   const desc = (sel.sapDescripcion || '').slice(0, 40)
   const qty = String(sel.cantidad)
 
   return [
-    sap,             // Material (código SAP 502...) — NUNCA código de proveedor
-    sap ? '' : desc, // Txt.brv. — solo si no hay código SAP (texto libre)
+    sap,             // Material (código SAP)
+    sap ? '' : desc, // Txt.brv. — solo si no hay código SAP
     qty,             // Ctd.pedido
     '',              // UM
     '',              // T
@@ -36,10 +37,10 @@ function buildLine(sel: SeleccionPedido): string {
     '',              // Grp.art.
     '1001',          // Centro
     '100',           // Almacén
+    solicitudCompra || '', // SC — Nº Solicitud de Compra
   ].join('\t')
 }
 
-// Agrupa por proveedor elegido por el usuario
 function groupBySupplier(
   selecciones: SeleccionPedido[]
 ): { proveedor: string; codigo: string; lineas: SeleccionPedido[] }[] {
@@ -71,15 +72,17 @@ function ProveedorBlock({
   proveedor,
   codigo,
   lineas,
+  solicitudCompra,
 }: {
   proveedor: string
   codigo: string
   lineas: SeleccionPedido[]
+  solicitudCompra?: string
 }) {
   const [copiado, setCopiado] = useState(false)
 
   const handleCopiar = async () => {
-    const text = lineas.map(buildLine).join('\n')
+    const text = lineas.map((sel) => buildLine(sel, solicitudCompra)).join('\n')
     await copyToClipboard(text)
     setCopiado(true)
     setTimeout(() => setCopiado(false), 2500)
@@ -91,11 +94,20 @@ function ProveedorBlock({
     <div className="rounded-xl border border-white/[0.08] overflow-hidden">
       {/* Cabecera proveedor */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.05]" style={{ background: 'rgba(255,255,255,0.02)' }}>
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <Building2 className="w-3.5 h-3.5 text-indigo-400/60 shrink-0" />
           <span className="text-sm font-semibold text-white/85 truncate">{proveedor}</span>
           {codigo && <span className="text-xs text-white/30 font-mono shrink-0">{codigo}</span>}
           <span className="text-xs text-white/30 shrink-0">{lineas.length} línea{lineas.length > 1 ? 's' : ''}</span>
+          {solicitudCompra && (
+            <span
+              className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full shrink-0"
+              style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', color: 'rgba(165,180,252,0.85)' }}
+            >
+              <FileText className="w-2.5 h-2.5" />
+              SC {solicitudCompra}
+            </span>
+          )}
         </div>
         <button
           onClick={handleCopiar}
@@ -145,7 +157,7 @@ function ProveedorBlock({
   )
 }
 
-export default function ExportSAP({ selecciones }: ExportSAPProps) {
+export default function ExportSAP({ selecciones, solicitudCompra }: ExportSAPProps) {
   const incluidas = selecciones.filter((s) => s.incluido)
   if (incluidas.length === 0) {
     return (
@@ -162,18 +174,36 @@ export default function ExportSAP({ selecciones }: ExportSAPProps) {
     <div className="glass rounded-2xl overflow-hidden border border-indigo-500/15">
       {/* Cabecera */}
       <div className="px-4 py-3 border-b border-white/[0.05]">
-        <h3 className="text-sm font-semibold text-white/85">Pedidos SAP — por proveedor</h3>
-        <p className="text-xs text-white/35 mt-0.5">
-          {grupos.length} pedido{grupos.length > 1 ? 's' : ''} · {incluidas.length} línea{incluidas.length > 1 ? 's' : ''} · Clic en celda Material fila 1 → Ctrl+V
-        </p>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold text-white/85">Pedidos SAP — por proveedor</h3>
+            <p className="text-xs text-white/35 mt-0.5">
+              {grupos.length} pedido{grupos.length > 1 ? 's' : ''} · {incluidas.length} línea{incluidas.length > 1 ? 's' : ''} · Clic en celda Material fila 1 → Ctrl+V
+            </p>
+          </div>
+          {solicitudCompra && (
+            <span
+              className="flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg shrink-0"
+              style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.22)', color: 'rgba(165,180,252,0.9)' }}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              SC {solicitudCompra}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="p-4 space-y-3">
         {grupos.map((g, i) => (
-          <ProveedorBlock key={i} proveedor={g.proveedor} codigo={g.codigo} lineas={g.lineas} />
+          <ProveedorBlock
+            key={i}
+            proveedor={g.proveedor}
+            codigo={g.codigo}
+            lineas={g.lineas}
+            solicitudCompra={solicitudCompra}
+          />
         ))}
 
-        {/* Aviso aproximados */}
         {aproximados > 0 && (
           <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/[0.05] border border-amber-500/15 mt-1">
             <AlertCircle className="w-3.5 h-3.5 text-amber-400/70 shrink-0 mt-px" />
@@ -202,13 +232,21 @@ export default function ExportSAP({ selecciones }: ExportSAPProps) {
               { label: 'Grp.', w: 32 },
               { label: 'Centro', w: 44 },
               { label: 'Alm.', w: 36 },
+              { label: 'SC**', w: 44, highlight: !!solicitudCompra },
             ].map((col, ci) => (
-              <div key={ci} className="text-[10px] text-white/20 font-mono shrink-0 border-r border-white/[0.04] pr-1" style={{ width: col.w }}>
+              <div
+                key={ci}
+                className="text-[10px] font-mono shrink-0 border-r border-white/[0.04] pr-1"
+                style={{
+                  width: col.w,
+                  color: (col as { highlight?: boolean }).highlight ? 'rgba(165,180,252,0.6)' : 'rgba(255,255,255,0.2)',
+                }}
+              >
                 {col.label}
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-white/15 mt-1">* Txt.brv. se incluye solo si no hay código SAP (posición texto libre)</p>
+          <p className="text-[10px] text-white/15 mt-1">* Txt.brv. solo si no hay código SAP · ** SC incluye nº solicitud si está configurado</p>
         </div>
       </div>
     </div>

@@ -38,15 +38,59 @@ PASO 1 — INTERPRETA primero QUÉ pieza es realmente (NO te quedes con las pala
 • Si el usuario usa un nombre coloquial del taller, identifica el nombre técnico comercial estándar
 • Un repuesto puede nombrarse por la máquina donde va montado: busca también el nombre genérico del componente
 
-PASO 2 — Genera entre 4 y 7 BÚSQUEDAS abreviadas estilo SAP (como teclearía un comprador):
-• Abreviaturas SAP habituales: val (válvula), torn (tornillo), rodto (rodamiento), mot (motor), reduc (reductor), abraz (abrazadera), jta (junta), cil (cilindro), ret (retén), bba (bomba), filt (filtro), cont (contactor)
+═══════════════════════════════════════════════════════════
+EQUIVALENCIAS TÉCNICAS CRÍTICAS — aplica SIEMPRE para estos materiales:
+
+MOTORES ELÉCTRICOS:
+• Potencia: CONVIERTE SIEMPRE a kW Y a CV (1 CV = 0,736 kW):
+  0,09kW=0,12CV | 0,12kW=0,16CV | 0,18kW=0,25CV | 0,25kW=0,34CV
+  0,37kW=0,5CV  | 0,55kW=0,75CV | 0,75kW=1CV    | 1,1kW=1,5CV
+  1,5kW=2CV     | 2,2kW=3CV     | 3kW=4CV       | 4kW=5,5CV
+  5,5kW=7,5CV   | 7,5kW=10CV    | 11kW=15CV     | 15kW=20CV
+  18,5kW=25CV   | 22kW=30CV     | 30kW=40CV     | 37kW=50CV
+• Velocidades/polos a 50 Hz:
+  2 polos = 3000 rpm / 2900 rpm  |  4 polos = 1500 rpm / 1450 rpm
+  6 polos = 1000 rpm / 960 rpm   |  8 polos = 750 rpm / 720 rpm
+• "2V" o "2 velocidades" = biveloc = bivelo (motor de dos velocidades Dahlander)
+• Carcasa IEC: 56/63/71/80/90L/100L/112M/132S/132M/160M/160L/180M/200L...
+• Variantes SAP para motores: "mot" + potencia_kW + "kw" / "cv" + polos/rpm
+  Ej. motor 1,5kW 4 polos → "mot 1.5kw 4p", "mot 2cv 1450rpm", "motor 1.5kw", "mot trifl 1.5", "mot 1.5 4 polos"
+
+REDUCTORES:
+• "reductor" = "reduc" = "motorreductor" = "motoreductor" = "reductor de velocidad"
+• Relación i (índice de reducción): i=5/10/20/30/40/50/60/80/100
+• Variantes: "reduc" + ratio + potencia_entrada (kW)
+
+RODAMIENTOS:
+• Referencia ISO: 6=rígido bolas | 7=contacto angular | 22=rótulas | 32=cónicos | NU/N=cilíndricos
+• Sufijos: -2RS=2 retenes | -ZZ/-2Z=2 tapas metálicas | -C3=holgura C3
+• "rodto" = "rodamiento" = "cojinete" = "bearing"
+• Búsqueda por referencia: "rodto 6204", "rodto 6204-2rs", "cojinete 6204"
+
+VARIADORES DE FRECUENCIA / ARRANCADORES:
+• "variador" = "variador frec" = "inverter" = "convertidor frec" = "VFD" = "VSD"
+• "arrancador suave" = "soft starter" = "arranc suave"
+• Potencia en kW; busca con kW Y CV equivalente
+
+BOMBAS:
+• "bomba" = "bba" = "bomba centrifuga" = "bomba volutas"
+• Caudal en m³/h o l/min; presión en bar o mca
+
+CONTACTORES / PROTECCIONES:
+• "contactor" = "cont" + amperios (A) o kW
+• "relé térmico" = "rele termico" = "protecc motor" = "guardamotor"
+═══════════════════════════════════════════════════════════
+
+PASO 2 — Genera entre 5 y 8 BÚSQUEDAS abreviadas estilo SAP (como teclearía un comprador):
+• Abreviaturas SAP habituales: val (válvula), torn (tornillo), rodto (rodamiento), mot (motor), reduc (reductor), abraz (abrazadera), jta (junta), cil (cilindro), ret (retén), bba (bomba), filt (filtro), cont (contactor), var (variador)
+• Para motores: genera variantes con kW Y CV, con y sin polos/rpm
 • Incluye la medida/referencia principal en cada variante relevante (diámetro, longitud, referencia)
 • Cubre: término técnico estándar + coloquial de taller + abreviatura SAP + sinónimo de codificación
 • Si la medida admite dos sistemas (DN50 = 2", NW40 = 1½"), genera variantes con ambos
 • PROHIBIDO: inventar referencias, códigos SAP o marcas no mencionadas explícitamente
 
 Devuelve SOLO un JSON sin texto adicional:
-{"variantes": ["búsqueda1", "búsqueda2", "búsqueda3", "búsqueda4"]}`
+{"variantes": ["búsqueda1", "búsqueda2", "búsqueda3", "búsqueda4", "búsqueda5"]}`
 
 async function generarVariantes(descripcion: string): Promise<string[]> {
   try {
@@ -71,10 +115,17 @@ async function generarVariantes(descripcion: string): Promise<string[]> {
 
 const SYSTEM_PROMPT = `Eres el asistente de compras industriales de Vidal Golosinas. El motor de 5 pasos ya ejecutó el algoritmo y te entrega los candidatos con el proveedor correcto y los SAPs más relevantes del histórico real (enero 2025 – mayo 2026, 6.368 SAPs, 244 proveedores). Tu tarea: generar la respuesta final en el formato exacto, siendo técnico, preciso y sin inventar nada.
 
-CÓMO FUNCIONA LA BÚSQUEDA (igual que un comprador en SAP):
-1) Identifica QUÉ pieza es realmente (no te dejes engañar por palabras sueltas).
-2) El motor ya ha buscado el material con varias abreviaturas/sinónimos (ari seg, aro seg, anillo seg...) y te da hasta 5 SAPs candidatos parecidos.
-3) Tu trabajo es DEVOLVER ESOS CANDIDATOS para que el usuario elija uno. NO elijas tú uno solo: presenta los que el motor encontró (hasta 5), del más parecido al menos.
+CÓMO FUNCIONA LA BÚSQUEDA (igual que un comprador experto en SAP):
+1) Identifica QUÉ pieza es realmente (no te dejes engañar por las palabras literales del usuario).
+2) Para MOTORES: interpreta siempre la potencia en kW Y CV (1 CV = 0,736 kW), número de polos/rpm (2p=3000rpm, 4p=1500rpm, 6p=1000rpm, 8p=750rpm). Si el usuario dice "motor 2CV 4 polos" pero la BD tiene "mot 1.5kw 4p", son el MISMO motor.
+3) El motor ya ha buscado con varias abreviaturas/sinónimos y te da hasta 5 SAPs candidatos.
+4) Tu trabajo es DEVOLVER ESOS CANDIDATOS para que el usuario elija uno. NO elijas tú uno solo: presenta todos los que el motor encontró (hasta 5), del más parecido al menos.
+
+CAMPO tipo_match — indica cómo de bien se ha encontrado el material:
+• "EXACTO": hay SAP con referencia/medida/potencia exacta o prácticamente idéntica
+• "PARCIAL": hay SAP de la misma familia/tipo pero sin coincidencia exacta de medida o potencia (p.ej. motor de potencia cercana, rodamiento de serie similar)
+• "EQUIVALENTE": el material solicitado no está en la BD con ese código/medida exactos, pero se propone un equivalente técnico válido por características (misma función, misma potencia equivalente kW/CV, mismos polos/rpm, compatible dimensionalmente)
+• "SIN_MATCH": no hay datos suficientes para encontrar ni equivalente; se necesita más información
 
 EQUIVALENCIAS DE PROVEEDOR (aplícalas en silencio, NO las expliques):
 • 100025296 (BERDIN MURCIA) = 100035845 (BERDIN LEVANTE): usa 100035845.
@@ -95,8 +146,9 @@ REGLAS DURAS:
 - SAP 599000000 → genérico, IGNÓRALO.
 - DEVUELVE TODOS los SAPs candidatos del motor (hasta 5) en codigos_sap_sugeridos, ordenados del más parecido al menos. El usuario elegirá uno.
 - Si un SAP viene marcado como aproximado (campo aproximado=true o con notaMedida), conserva esa nota en su campo "nota" para que el usuario sepa que debe verificar la medida.
+- Para motores con tipo_match EQUIVALENTE: en el motivo explica la equivalencia (ej. "Motor solicitado 2 CV / 1,5 kW 4 polos — equivalente funcional al SAP 502XXXXXX que es 1,5 kW 4 polos / 1450 rpm").
 - Proveedor: devuelve el principal y la alternativa. El usuario confirmará con cuál se gestiona.
-- El motivo debe ser técnico y concreto: tipo real de pieza + medida + por qué ese proveedor.
+- El motivo debe ser técnico y concreto: tipo real de pieza + medida/potencia + por qué ese proveedor.
 
 OBSERVACIONES — LIMPIAS Y OPERATIVAS:
 - Solo lo útil para gestionar el pedido. PROHIBIDO: "proveedor en declive", "cód. heredado", "Inox.Molina", explicaciones internas.
@@ -106,6 +158,7 @@ SALIDA JSON ESTRICTO (sin texto antes ni después):
 {
   "tipo_material": "string",
   "marca_detectada": "string (o 'no especificada')",
+  "tipo_match": "EXACTO | PARCIAL | EQUIVALENTE | SIN_MATCH",
   "proveedor_recomendado": { "nombre": "string", "codigo": "string" },
   "alternativas": [ { "nombre": "string", "codigo": "string", "nota": "string opcional" } ],
   "codigos_sap_sugeridos": [ { "codigo": "string", "descripcion": "string", "proveedor": "string", "nota": "string opcional (medida no exacta, verificar...)" } ],
@@ -127,6 +180,7 @@ interface RecomendacionNueva {
   alternativas: Array<{ nombre: string; codigo: string; nota?: string }>
   codigos_sap_sugeridos: SapSugeridoOut[]
   nivel_confianza: 'ALTO' | 'MEDIO' | 'BAJO'
+  tipoMatch?: 'EXACTO' | 'PARCIAL' | 'EQUIVALENTE' | 'SIN_MATCH'
   motivo: string
   observaciones: string
   seleccionado: boolean
@@ -182,11 +236,12 @@ Resultado del motor (5 pasos):
 ${JSON.stringify(contextoAlgoritmo, null, 2)}
 
 INSTRUCCIONES:
-1. Identifica el tipo REAL de pieza y la medida.
-2. DEVUELVE TODOS los saps_relacionados (hasta 5) en codigos_sap_sugeridos, del más parecido al menos. El usuario elegirá uno; no descartes candidatos tú.
-3. Si un SAP trae notaMedida o aproximado=true, copia esa nota en su campo "nota".
-4. Proveedor principal + alternativa; el usuario confirmará cuál.
-5. Observaciones solo operativas. Genera el JSON final.`
+1. Identifica el tipo REAL de pieza y la medida/potencia (si es motor, convierte kW↔CV y polos↔rpm).
+2. Determina tipo_match: EXACTO si hay SAP que coincide en medida/potencia exacta; PARCIAL si es similar pero no exacto; EQUIVALENTE si los SAPs son de familia o potencia equivalente; SIN_MATCH si no hay datos suficientes.
+3. DEVUELVE TODOS los saps_relacionados (hasta 5) en codigos_sap_sugeridos, del más parecido al menos. El usuario elegirá uno; no descartes candidatos tú.
+4. Si un SAP trae notaMedida o aproximado=true, copia esa nota en su campo "nota".
+5. Proveedor principal + alternativa; el usuario confirmará cuál.
+6. Observaciones solo operativas. Genera el JSON final.`
 
   const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
@@ -235,6 +290,11 @@ INSTRUCCIONES:
     }
   })
 
+  const tipoMatchRaw = parsed.tipo_match as string | undefined
+  const tipoMatchValido = ['EXACTO', 'PARCIAL', 'EQUIVALENTE', 'SIN_MATCH'].includes(tipoMatchRaw ?? '')
+    ? (tipoMatchRaw as 'EXACTO' | 'PARCIAL' | 'EQUIVALENTE' | 'SIN_MATCH')
+    : undefined
+
   return {
     cantidad: material.cantidad,
     material_detectado: `${material.cantidad}x ${material.descripcion}`,
@@ -246,6 +306,7 @@ INSTRUCCIONES:
     alternativas: alternativasLimpias,
     codigos_sap_sugeridos: sapsLimpios,
     nivel_confianza: (parsed.nivel_confianza as 'ALTO' | 'MEDIO' | 'BAJO') || (resultado.pasoDeterminante <= 3 ? 'ALTO' : resultado.pasoDeterminante === 4 ? 'MEDIO' : 'BAJO'),
+    tipoMatch: tipoMatchValido,
     motivo: limpiarTextoInterno(String(parsed.motivo || '')),
     observaciones: limpiarTextoInterno(String(parsed.observaciones || '')),
     seleccionado: true,
