@@ -18,28 +18,37 @@ function cleanSap(sap: string | undefined | null): string {
   return sap.trim()
 }
 
-// Columnas SAP ME21N: Material | Txt.brv. | Ctd. | UM | T | Fe.entrega | Prc.neto | Mon. | por | CPP | Grp.art. | Centro | Almacén | Lote | Sol.pedido
 function buildLine(sel: SeleccionPedido, solicitudCompra?: string): string {
   const sap = cleanSap(sel.sapElegido)
   const desc = (sel.sapDescripcion || '').slice(0, 40)
   const qty = String(sel.cantidad)
 
   return [
-    sap,
-    sap ? '' : desc,
-    qty,
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '1001',
-    '100',
-    '',                        // Lote — vacío (columna 14)
-    solicitudCompra || '',     // Sol.pedido (columna 15) ← FIX
+    sap,             // 1  Material
+    sap ? '' : desc, // 2  Txt.brv.
+    qty,             // 3  Ctd.pedido
+    '',              // 4  U...
+    '',              // 5  T
+    '',              // 6  Fe.entrega
+    '',              // 7  Prc.neto
+    '',              // 8  Mon...
+    '',              // 9  por
+    '',              // 10 CPP
+    '',              // 11 Grupo art.
+    '1001',          // 12 Centro
+    '100',           // 13 Almacén
+    '',              // 14 Lote
+    '',              // 15 Segmento de stock
+    '',              // 16 Segm.necesidad
+    '',              // 17 Nº nec.
+    '',              // 18 Solicitante
+    '',              // 19 C...
+    '',              // 20 Mat.gest.stock
+    '',              // 21 Reg.info
+    '',              // 22 Po...
+    '',              // 23 Gr...
+    '',              // 24 T...
+    solicitudCompra || '', // 25 Sol.pedido ✓
   ].join('\t')
 }
 
@@ -384,6 +393,16 @@ export default function ExportSAP({
               { label: 'Centro', w: 44 },
               { label: 'Alm.', w: 36 },
               { label: 'Lote', w: 36 },
+              { label: 'Seg.stock', w: 56 },
+              { label: 'Seg.nec.', w: 52 },
+              { label: 'Nº nec.', w: 48 },
+              { label: 'Solicit.', w: 48 },
+              { label: 'C...', w: 28 },
+              { label: 'Mat.g.', w: 40 },
+              { label: 'Reg.', w: 32 },
+              { label: 'Po...', w: 32 },
+              { label: 'Gr...', w: 32 },
+              { label: 'T...', w: 28 },
               { label: 'Sol.ped.**', w: 60, highlight: !!solicitudCompra },
             ].map((col, ci) => (
               <div
@@ -399,7 +418,7 @@ export default function ExportSAP({
             ))}
           </div>
           <p className="text-[10px] text-white/15 mt-1">
-            * Txt.brv. solo si no hay código SAP · ** Sol.ped. = columna 15 (correcta en ME21N)
+            * Txt.brv. solo si no hay código SAP · ** Sol.ped. = columna 25 (correcta en ME21N)
           </p>
         </div>
       </div>
