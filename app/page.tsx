@@ -26,7 +26,6 @@ type Paso = 'ocr' | 'extraccion' | 'busqueda' | 'razonamiento' | null
 interface LogEntry { paso: Paso; texto: string; ok: boolean }
 interface DbStats { marcas: number; proveedores: number; saps: number }
 
-// ─── Construye el estado inicial de selecciones desde las recomendaciones ───
 function construirSeleccionInicial(
   recs: RecomendacionNueva[],
   unificado?: Array<{ indice: number; proveedor_asignado: { nombre: string; codigo: string } | null }>
@@ -71,7 +70,6 @@ export default function HomePage() {
   const addLog = (paso: Paso, texto: string, ok: boolean) =>
     setLog(prev => [...prev, { paso, texto, ok }])
 
-  // Actualiza una línea de selección por índice
   const actualizarSeleccion = (indice: number, cambios: Partial<SeleccionPedido>) =>
     setSelecciones(prev => prev.map(s => s.indice === indice ? { ...s, ...cambios } : s))
 
@@ -87,7 +85,6 @@ export default function HomePage() {
       setPasoActual(null)
 
       try {
-        // PASO 1: OCR
         let ocrTexto = ''
         if (imagen) {
           setPasoActual('ocr')
@@ -99,7 +96,6 @@ export default function HomePage() {
           addLog('ocr', `OCR: "${ocrTexto.slice(0, 80)}${ocrTexto.length > 80 ? '…' : ''}"`, true)
         }
 
-        // PASO 2: EXTRACCIÓN
         setPasoActual('extraccion')
         const consulta = [texto, ocrTexto].filter(Boolean).join('\n').trim()
         if (!consulta) throw new Error('No se pudo extraer texto de la entrada')
@@ -119,11 +115,9 @@ export default function HomePage() {
         }
         addLog('extraccion', `${materiales.length} material${materiales.length > 1 ? 'es' : ''}: ${materiales.map(m => m.descripcion).join(', ')}`, true)
 
-        // PASO 3: BD
         setPasoActual('busqueda')
         addLog('busqueda', `Consultando base de datos: ${dbStats.saps.toLocaleString('es-ES')} SAPs · ${dbStats.marcas} marcas · ${dbStats.proveedores} proveedores`, true)
 
-        // PASO 4: IA
         setPasoActual('razonamiento')
         const recRes = await fetch('/api/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materiales }) })
         if (!recRes.ok) throw new Error('Error en recomendación')
@@ -166,10 +160,10 @@ export default function HomePage() {
   }
 
   const PASOS_INFO = {
-    ocr:         { icon: ScanText,      label: 'OCR de imagen' },
-    extraccion:  { icon: Cpu,           label: 'Extrayendo materiales' },
-    busqueda:    { icon: PackageSearch, label: 'Consultando base de datos' },
-    razonamiento:{ icon: BrainCircuit,  label: 'Analizando con IA' },
+    ocr:          { icon: ScanText,      label: 'OCR de imagen' },
+    extraccion:   { icon: Cpu,           label: 'Extrayendo materiales' },
+    busqueda:     { icon: PackageSearch, label: 'Consultando base de datos' },
+    razonamiento: { icon: BrainCircuit,  label: 'Analizando con IA' },
   }
 
   const incluidas = selecciones.filter(s => s.incluido)
@@ -184,7 +178,6 @@ export default function HomePage() {
 
       <main className="relative max-w-4xl lg:max-w-[1160px] mx-auto px-5 pt-20 pb-20">
 
-        {/* Welcome */}
         {recomendaciones.length === 0 && !cargando && (
           <div className="mb-10 pt-8">
             <h1 className="text-3xl font-bold text-white/93 mb-3 tracking-tight leading-snug">
@@ -204,7 +197,6 @@ export default function HomePage() {
 
         <InputZone onAnalizar={handleAnalizar} cargando={cargando} historicoCargado={dbStats.saps > 0} />
 
-        {/* Log de progreso */}
         {(cargando || log.length > 0) && (
           <div className="mt-6 glass rounded-xl p-4 space-y-2">
             {log.map((entry, i) => (
@@ -236,11 +228,9 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── RESULTADOS ─────────────────────────────────────────── */}
         {recomendaciones.length > 0 && (
           <div className="mt-8">
 
-            {/* Solicitud original — persiste para no perder el contexto */}
             {consultaActual && (
               <div
                 className="mb-5 rounded-xl overflow-hidden"
@@ -252,7 +242,6 @@ export default function HomePage() {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] text-white/25 uppercase tracking-widest mb-1 font-semibold">Solicitud analizada</p>
-                    {/* Chips de artículos identificados */}
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {recomendaciones.map((rec, i) => {
                         const label = rec.tipo_material && rec.tipo_material !== 'No clasificado'
@@ -277,7 +266,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Barra de resumen */}
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold text-white/80">
@@ -305,10 +293,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Layout: tarjetas (izq) + fichas técnicas (der) */}
             <div className="lg:flex lg:gap-5 lg:items-start">
 
-              {/* ── Columna izquierda: tarjetas + export ─────────── */}
               <div className="flex-1 min-w-0 space-y-4">
                 {recomendaciones.map((rec, i) => {
                   const sel = selecciones.find(s => s.indice === i)
@@ -326,7 +312,6 @@ export default function HomePage() {
                   )
                 })}
 
-                {/* ── Nº Solicitud de Compra + Export ────────── */}
                 {incluidas.length > 0 && (
                   <div className="mt-6 space-y-3">
                     <div
@@ -350,12 +335,16 @@ export default function HomePage() {
                         </button>
                       )}
                     </div>
-                    <ExportSAP selecciones={selecciones} solicitudCompra={solicitudCompra} />
+                    <ExportSAP
+                      selecciones={selecciones}
+                      solicitudCompra={solicitudCompra}
+                      proveedoresDB={proveedoresDB}
+                      onSeleccionesChange={setSelecciones}
+                    />
                   </div>
                 )}
               </div>
 
-              {/* ── Columna derecha: fichas técnicas (sticky) ─────── */}
               <div className="hidden lg:block w-56 shrink-0">
                 <div className="sticky top-24 space-y-3">
                   <div className="flex items-center gap-2 px-1 mb-1">
@@ -368,13 +357,11 @@ export default function HomePage() {
                       className="rounded-xl p-3 space-y-2"
                       style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}
                     >
-                      {/* Nombre / tipo */}
                       <p className="text-[11px] font-semibold text-white/70 leading-snug">
                         {rec.tipo_material && rec.tipo_material !== 'No clasificado'
                           ? rec.tipo_material
                           : rec.material_detectado.replace(/^\d+x\s*/, '')}
                       </p>
-
                       {rec.ficha_tecnica ? (
                         <>
                           <p className="text-[11px] text-white/48 leading-relaxed">{rec.ficha_tecnica.descripcion}</p>
@@ -402,7 +389,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Consultas recientes */}
         {consultas.length > 0 && recomendaciones.length === 0 && !cargando && (
           <div className="mt-8">
             <p className="text-xs text-white/20 mb-3 font-medium">Consultas recientes:</p>
