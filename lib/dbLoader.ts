@@ -107,7 +107,9 @@ function loadCatalogo(dataDir: string): CatalogoSapRow[] {
 export function loadDb(): DbData {
   if (cache) return cache
 
-  const dataDir = path.join(process.cwd(), 'public', 'data')
+  // Los datos viven en /data (fuera de public/) para que el histórico de compras
+  // no sea descargable desde la URL pública de la app.
+  const dataDir = path.join(process.cwd(), 'data')
 
   const marcas: MarcaRow[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'marcas_a_proveedor.json'), 'utf-8'))
   const guia: GuiaRow[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'guia_por_tipo_material.json'), 'utf-8'))

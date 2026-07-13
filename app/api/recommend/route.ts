@@ -12,6 +12,12 @@ function getOpenAI() {
   return _openai
 }
 
+// Modelos configurables por env var (Vercel) sin tocar código:
+// - RAZONADOR: formatea la respuesta final por material (calidad > coste)
+// - RAPIDO: genera variantes de búsqueda (coste mínimo)
+const MODELO_RAZONADOR = process.env.OPENAI_MODEL_RAZONADOR || 'gpt-4o'
+const MODELO_RAPIDO = process.env.OPENAI_MODEL_RAPIDO || 'gpt-4o-mini'
+
 // ════════════════════════════════════════════════════════════════════════
 //  PASO PREVIO: la IA genera VARIANTES de búsqueda estilo SAP
 //  Igual que un comprador: primero entiende qué es el material y cómo puede
@@ -95,7 +101,7 @@ Devuelve SOLO un JSON sin texto adicional:
 async function generarVariantes(descripcion: string): Promise<string[]> {
   try {
     const resp = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: MODELO_RAPIDO,
       messages: [
         { role: 'system', content: PROMPT_VARIANTES },
         { role: 'user', content: `Material: "${descripcion}"` },
@@ -250,7 +256,7 @@ INSTRUCCIONES:
 6. Observaciones solo operativas. Genera el JSON final.`
 
   const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-4o',
+    model: MODELO_RAZONADOR,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: userMsg },
@@ -283,7 +289,13 @@ INSTRUCCIONES:
 
   // SAPs: preferimos los del motor (llevan flags), enriquecidos con la nota del modelo si la hay.
   const sapsMotor = resultado.sapsSugeridos || []
-  const sapsModelo = (parsed.codigos_sap_sugeridos as SapSugeridoOut[]) || []
+  // Los SAPs que proponga el modelo solo se aceptan si EXISTEN en la BD (histórico
+  // o catálogo) y no son el genérico 599000000 — garantía de no inventar códigos.
+  const sapsModelo = ((parsed.codigos_sap_sugeridos as SapSugeridoOut[]) || []).filter((s) => {
+    const codigo = String(s?.codigo ?? '').replace(/\s/g, '')
+    if (!codigo || /^0*599000000$/.test(codigo)) return false
+    return db.sapIndex.has(codigo) || db.catalogoIndex.has(codigo)
+  })
   const sapsLimpios: SapSugeridoOut[] = (sapsMotor.length ? sapsMotor : sapsModelo).map((s) => {
     const notaModelo = sapsModelo.find((m) => m.codigo === s.codigo)?.nota
     const nota = (s as { notaMedida?: string }).notaMedida || notaModelo

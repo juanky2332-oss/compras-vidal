@@ -1,6 +1,6 @@
 """
 Extrae la pestaña "codigos sap y material" del Excel de la BD de compras
-y genera catalogo_sap.json en public/data/.
+y genera catalogo_sap.json en data/.
 
 Uso:
   python scripts/extract_catalogo_sap.py
@@ -13,8 +13,8 @@ Asegúrate de que el Excel actualizado está en:
 import openpyxl, json, sys, os
 sys.stdout.reconfigure(encoding='utf-8')
 
-EXCEL_PATH  = r"C:\Users\juank\BASE_DATOS_COMPRAS_PROVEEDORES_v2.xlsx"
-OUT_DIR     = os.path.join(os.path.dirname(__file__), '..', 'public', 'data')
+EXCEL_PATH  = os.path.join(os.path.dirname(__file__), '..', 'data', 'fuentes', 'BASE_DATOS_COMPRAS_PROVEEDORES_v2.xlsx')
+OUT_DIR     = os.path.join(os.path.dirname(__file__), '..', 'data')
 OUT_FILE    = os.path.join(OUT_DIR, 'catalogo_sap.json')
 
 # Nombres posibles de la pestaña (en caso de ligeras variaciones)

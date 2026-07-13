@@ -132,7 +132,7 @@ export default function HomePage() {
 
         setRecomendaciones(recs)
         setSelecciones(construirSeleccionInicial(recs, unificado))
-        setConsultas(prev => [consulta.slice(0, 80), ...prev].slice(0, 5))
+        setConsultas(prev => [consulta, ...prev].slice(0, 5))
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error desconocido'
         addLog(pasoActual, msg, false)
@@ -396,7 +396,7 @@ export default function HomePage() {
               {consultas.map((q, i) => (
                 <button key={i} onClick={() => handleAnalizar(q, null)} disabled={cargando}
                   className="w-full text-left text-xs text-white/35 hover:text-white/55 px-3 py-2 rounded-lg border border-white/05 hover:border-white/10 hover:bg-white/02 transition-all truncate disabled:opacity-30">
-                  {q}…
+                  {q}
                 </button>
               ))}
             </div>
