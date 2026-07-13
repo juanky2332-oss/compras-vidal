@@ -5,6 +5,8 @@ import Header from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
+import SeccionesView from '@/components/SeccionesView'
+import GuardarEnSeccion from '@/components/GuardarEnSeccion'
 import type { RecomendacionNueva, Material, ItemPedidoUnificado, SeleccionPedido, ProveedorSimple } from '@/lib/types'
 import {
   PackageSearch,
@@ -19,6 +21,8 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
+  Sparkles,
+  Factory,
 } from 'lucide-react'
 
 type Paso = 'ocr' | 'extraccion' | 'busqueda' | 'razonamiento' | null
@@ -61,6 +65,7 @@ export default function HomePage() {
   const [consultas, setConsultas] = useState<string[]>([])
   const [consultaActual, setConsultaActual] = useState<string>('')
   const [solicitudExpandida, setSolicitudExpandida] = useState(false)
+  const [vista, setVista] = useState<'asistente' | 'secciones'>('asistente')
 
   useEffect(() => {
     fetch('/api/dbstats').then(r => r.json()).then(setDbStats).catch(() => {})
@@ -177,6 +182,34 @@ export default function HomePage() {
       <Header marcas={dbStats.marcas} proveedores={dbStats.proveedores} saps={dbStats.saps} />
 
       <main className="relative max-w-4xl lg:max-w-[1160px] mx-auto px-5 pt-20 pb-20">
+
+        {/* Conmutador de vista: Asistente IA | Secciones de fábrica */}
+        <div className="mt-6 mb-2 flex items-center gap-1 p-1 rounded-xl border border-white/08 w-fit" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <button
+            onClick={() => setVista('asistente')}
+            className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-lg transition-all"
+            style={{
+              background: vista === 'asistente' ? 'rgba(99,102,241,0.15)' : 'transparent',
+              color: vista === 'asistente' ? 'rgba(165,180,252,0.95)' : 'rgba(255,255,255,0.35)',
+            }}
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Asistente
+          </button>
+          <button
+            onClick={() => setVista('secciones')}
+            className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-lg transition-all"
+            style={{
+              background: vista === 'secciones' ? 'rgba(52,211,153,0.13)' : 'transparent',
+              color: vista === 'secciones' ? 'rgba(110,231,183,0.95)' : 'rgba(255,255,255,0.35)',
+            }}
+          >
+            <Factory className="w-3.5 h-3.5" /> Secciones
+          </button>
+        </div>
+
+        {vista === 'secciones' && <SeccionesView />}
+
+        <div className={vista === 'asistente' ? '' : 'hidden'}>
 
         {recomendaciones.length === 0 && !cargando && (
           <div className="mb-10 pt-8">
@@ -341,6 +374,7 @@ export default function HomePage() {
                       proveedoresDB={proveedoresDB}
                       onSeleccionesChange={setSelecciones}
                     />
+                    <GuardarEnSeccion selecciones={selecciones} />
                   </div>
                 )}
               </div>
@@ -402,6 +436,8 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
+        </div>{/* fin vista asistente */}
       </main>
     </div>
   )

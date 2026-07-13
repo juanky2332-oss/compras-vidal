@@ -28,6 +28,16 @@ Texto / imagen
 - **ALTO / MEDIO / BAJO**: fiabilidad de la recomendación según el paso determinante.
 - **EXACTO / PARCIAL / EQUIVALENTE / SIN_MATCH**: exactitud de la referencia/medida encontrada. Los códigos `~ aprox.` requieren verificar medida antes de pedir.
 
+## Secciones de fábrica
+
+Vista independiente (pestaña **Secciones**) para llevar el histórico de compras por departamento: Producción, Planta Piloto, Empaquetado, Regaliz, Expediciones, Espumoso, Caramelo Blando, Caramelo Duro… (editables, se pueden crear más).
+
+- Cada compra registra: fecha, código SAP (con autocompletado desde la BD), descripción, cantidad, precio aproximado €/ud y proveedor.
+- Dos vistas por sección: **Histórico** (cronológico, cantidad y precio editables en línea) y **Por artículo** (agrupado por SAP: veces comprado, unidades, último precio, gasto acumulado).
+- Desde el asistente, el botón **"Guardar en sección"** registra las líneas del pedido analizado en el departamento que elijas (el precio se completa después).
+- Export CSV por sección + **Backup/Restaurar** JSON de todas las secciones.
+- ⚠ Los datos viven en `localStorage` del navegador (clave `cv_secciones_v1`): descarga un backup periódicamente y úsalo para pasar los datos a otro equipo.
+
 ## Base de datos (`data/`)
 
 | Fichero | Contenido |
