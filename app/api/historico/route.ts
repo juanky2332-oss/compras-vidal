@@ -1,25 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { llamarN8n, nubeConfigurada as configurado } from '@/lib/n8nHistorico'
 
 export const dynamic = 'force-dynamic'
 
 // Proxy hacia el webhook n8n que lee/escribe el Google Sheet "historico vidal".
 // El token nunca llega al navegador: vive solo en las env vars del servidor.
-const N8N_URL = process.env.N8N_HISTORICO_URL || ''
-const N8N_TOKEN = process.env.N8N_HISTORICO_TOKEN || ''
-
-const configurado = () => Boolean(N8N_URL && N8N_TOKEN)
-
-async function llamarN8n(payload: unknown): Promise<Record<string, unknown>> {
-  const res = await fetch(N8N_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-historico-token': N8N_TOKEN },
-    body: JSON.stringify(payload),
-    cache: 'no-store',
-  })
-  const texto = await res.text()
-  if (!res.ok || !texto) throw new Error(`n8n respondió ${res.status}`)
-  return JSON.parse(texto)
-}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function normalizarFila(r: any) {

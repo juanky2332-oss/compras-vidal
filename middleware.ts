@@ -19,7 +19,8 @@ export async function middleware(req: NextRequest) {
   if (!password) return NextResponse.next()
 
   const { pathname } = req.nextUrl
-  if (pathname === '/acceso' || pathname === '/api/acceso') return NextResponse.next()
+  // /api/salud es diagnóstico sin datos — accesible sin contraseña
+  if (pathname === '/acceso' || pathname === '/api/acceso' || pathname === '/api/salud') return NextResponse.next()
 
   const cookie = req.cookies.get(COOKIE)?.value
   if (cookie && cookie === (await firmar(password))) return NextResponse.next()

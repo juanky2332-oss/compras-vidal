@@ -17,6 +17,12 @@ export interface ResultadoNube {
 export async function listarNube(): Promise<ResultadoNube | null> {
   try {
     const r = await fetch('/api/historico', { cache: 'no-store' })
+    if (r.status === 401) {
+      // sesión caducada o pestaña abierta de antes de activar la contraseña:
+      // llevar al login para renovar la cookie
+      window.location.href = '/acceso'
+      return null
+    }
     if (!r.ok) return null
     const data = await r.json()
     if (!data?.configurado) return { configurado: false, rows: [] }
