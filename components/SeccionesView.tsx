@@ -5,19 +5,23 @@
 //  Independiente del asistente: los datos viven en localStorage del navegador.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Factory, Plus, ArrowLeft, Trash2, Pencil, Check, X, Search,
   Download, Upload, Package, Coins, CalendarDays, List, Layers3,
-  FileSpreadsheet,
+  FileSpreadsheet, Cloud, CloudOff, RefreshCw,
 } from 'lucide-react'
-import type { Seccion, CompraSeccion } from '@/lib/secciones'
+import type { Seccion, CompraSeccion, FilaHistorico } from '@/lib/secciones'
 import {
   cargarSecciones, guardarSecciones, nuevoId, hoyISO, statsSeccion,
   agruparPorArticulo, fmtEUR, fmtFecha, exportarCSVSeccion,
   exportarBackupJSON, parsearBackupJSON, COLORES_SECCION,
+  compraAFila, reconciliarConNube,
 } from '@/lib/secciones'
+import { listarNube, subirFilas, cargarPendientes } from '@/lib/syncHistorico'
 import type { SapSearchResult } from '@/lib/types'
+
+type EstadoSync = 'cargando' | 'ok' | 'sin-nube' | 'error'
 
 export default function SeccionesView() {
   const [secciones, setSecciones] = useState<Seccion[]>([])
@@ -27,9 +31,42 @@ export default function SeccionesView() {
   const [nombreNueva, setNombreNueva] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
 
+  // ── Sincronización con Google Sheets ────────────────────────────────────
+  const [sync, setSync] = useState<EstadoSync>('cargando')
+  const pushCola = useRef<Map<string, FilaHistorico>>(new Map())
+  const pushTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  // Agrupa cambios (ej. teclear un precio) y los sube en un solo envío
+  const programarPush = useCallback((filas: FilaHistorico[]) => {
+    for (const f of filas) pushCola.current.set(f.id, f)
+    clearTimeout(pushTimer.current)
+    pushTimer.current = setTimeout(async () => {
+      const enviar = Array.from(pushCola.current.values())
+      pushCola.current.clear()
+      const ok = await subirFilas(enviar)
+      setSync((prev) => (prev === 'sin-nube' ? prev : ok ? 'ok' : 'error'))
+    }, 1000)
+  }, [])
+
   useEffect(() => {
-    setSecciones(cargarSecciones())
+    const local = cargarSecciones()
+    setSecciones(local)
     setCargado(true)
+    ;(async () => {
+      const res = await listarNube()
+      if (res === null) { setSync('error'); return }
+      if (!res.configurado) { setSync('sin-nube'); return }
+      const { secciones: fusionadas, pendientes } = reconciliarConNube(local, res.rows)
+      guardarSecciones(fusionadas)
+      setSecciones(fusionadas)
+      setSync('ok')
+      // subir lo que la nube aún no conoce + reintentos de sesiones anteriores
+      const porSubir = [...cargarPendientes(), ...pendientes]
+      if (porSubir.length) {
+        const ok = await subirFilas(porSubir)
+        if (!ok) setSync('error')
+      }
+    })()
   }, [])
 
   // Persistir cada cambio
@@ -67,6 +104,8 @@ export default function SeccionesView() {
     if (!confirm(`El backup contiene ${parsed.length} secciones. ¿Reemplazar TODAS las secciones actuales por las del backup?`)) return
     actualizar(() => parsed)
     setSeccionActiva(null)
+    // subir todo el backup a la nube (upsert por id: no duplica)
+    programarPush(parsed.flatMap((s) => s.compras.map((c) => compraAFila(s.nombre, c))))
   }
 
   if (!cargado) return null
@@ -83,9 +122,12 @@ export default function SeccionesView() {
           actualizar((prev) => prev.map((s) => (s.id === activa.id ? { ...s, ...cambios } : s)))
         }
         onEliminar={() => {
+          // borrado lógico en la nube de todas sus compras
+          programarPush(activa.compras.map((c) => compraAFila(activa.nombre, c, 'borrada')))
           actualizar((prev) => prev.filter((s) => s.id !== activa.id))
           setSeccionActiva(null)
         }}
+        onSyncPush={programarPush}
       />
     )
   }
@@ -111,8 +153,23 @@ export default function SeccionesView() {
             </p>
           )}
         </div>
-        {/* Backup */}
+        {/* Estado nube + Backup */}
         <div className="flex items-center gap-2">
+          {sync === 'ok' && (
+            <span title="Histórico sincronizado con Google Sheets (historico vidal)" className="flex items-center gap-1.5 text-xs text-emerald-400/70 px-3 py-2 rounded-lg border border-emerald-500/15 bg-emerald-500/05">
+              <Cloud className="w-3.5 h-3.5" /> Nube
+            </span>
+          )}
+          {sync === 'cargando' && (
+            <span title="Sincronizando con Google Sheets…" className="flex items-center gap-1.5 text-xs text-white/35 px-3 py-2 rounded-lg border border-white/08">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sincronizando…
+            </span>
+          )}
+          {sync === 'error' && (
+            <span title="No se pudo conectar con Google Sheets — los cambios se guardan en local y se reintentarán" className="flex items-center gap-1.5 text-xs text-amber-400/70 px-3 py-2 rounded-lg border border-amber-500/15 bg-amber-500/05">
+              <CloudOff className="w-3.5 h-3.5" /> Sin conexión
+            </span>
+          )}
           <button
             onClick={() => exportarBackupJSON(secciones)}
             title="Descargar copia de seguridad de todas las secciones (JSON)"
@@ -207,8 +264,9 @@ export default function SeccionesView() {
       </div>
 
       <p className="mt-6 text-[11px] text-white/22 leading-relaxed max-w-2xl">
-        Los datos se guardan en este navegador. Usa <span className="text-white/40">Backup</span> de vez en cuando para
-        descargar una copia (y <span className="text-white/40">Restaurar</span> para recuperarla o pasarla a otro equipo).
+        {sync === 'ok'
+          ? <>Cada compra se sincroniza automáticamente con el Google Sheet <span className="text-white/40">historico vidal</span> — disponible desde cualquier equipo. <span className="text-white/40">Backup</span> descarga además una copia local.</>
+          : <>Los datos se guardan en este navegador. Usa <span className="text-white/40">Backup</span> de vez en cuando para descargar una copia (y <span className="text-white/40">Restaurar</span> para recuperarla o pasarla a otro equipo).</>}
       </p>
     </div>
   )
@@ -219,12 +277,13 @@ export default function SeccionesView() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function SeccionDetalle({
-  seccion, onVolver, onCambiar, onEliminar,
+  seccion, onVolver, onCambiar, onEliminar, onSyncPush,
 }: {
   seccion: Seccion
   onVolver: () => void
   onCambiar: (cambios: Partial<Seccion>) => void
   onEliminar: () => void
+  onSyncPush: (filas: FilaHistorico[]) => void
 }) {
   const [renombrando, setRenombrando] = useState(false)
   const [nombreEdit, setNombreEdit] = useState(seccion.nombre)
@@ -250,14 +309,30 @@ function SeccionDetalle({
     return todos.filter((a) => a.descripcion.toLowerCase().includes(q) || a.sapCodigo.includes(q))
   }, [seccion.compras, filtro])
 
-  const añadirCompra = (c: Omit<CompraSeccion, 'id'>) =>
-    onCambiar({ compras: [...seccion.compras, { ...c, id: nuevoId() }] })
+  const añadirCompra = (c: Omit<CompraSeccion, 'id'>) => {
+    const nueva: CompraSeccion = { ...c, id: nuevoId() }
+    onCambiar({ compras: [...seccion.compras, nueva] })
+    onSyncPush([compraAFila(seccion.nombre, nueva)])
+  }
 
-  const actualizarCompra = (id: string, cambios: Partial<CompraSeccion>) =>
-    onCambiar({ compras: seccion.compras.map((c) => (c.id === id ? { ...c, ...cambios } : c)) })
+  const actualizarCompra = (id: string, cambios: Partial<CompraSeccion>) => {
+    const nuevas = seccion.compras.map((c) => (c.id === id ? { ...c, ...cambios } : c))
+    onCambiar({ compras: nuevas })
+    const modificada = nuevas.find((c) => c.id === id)
+    if (modificada) onSyncPush([compraAFila(seccion.nombre, modificada)])
+  }
 
-  const eliminarCompra = (id: string) =>
+  const eliminarCompra = (id: string) => {
+    const borrada = seccion.compras.find((c) => c.id === id)
     onCambiar({ compras: seccion.compras.filter((c) => c.id !== id) })
+    if (borrada) onSyncPush([compraAFila(seccion.nombre, borrada, 'borrada')])
+  }
+
+  const renombrar = (nuevoNombre: string) => {
+    onCambiar({ nombre: nuevoNombre })
+    // las filas de la nube llevan el nombre de la sección: reetiquetarlas todas
+    onSyncPush(seccion.compras.map((c) => compraAFila(nuevoNombre, c)))
+  }
 
   return (
     <div className="pt-8 animate-fade-in">
@@ -283,12 +358,12 @@ function SeccionDetalle({
                 value={nombreEdit}
                 onChange={(e) => setNombreEdit(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && nombreEdit.trim()) { onCambiar({ nombre: nombreEdit.trim() }); setRenombrando(false) }
+                  if (e.key === 'Enter' && nombreEdit.trim()) { renombrar(nombreEdit.trim()); setRenombrando(false) }
                   if (e.key === 'Escape') { setNombreEdit(seccion.nombre); setRenombrando(false) }
                 }}
                 className="text-2xl font-bold bg-transparent text-white/90 outline-none border-b border-white/20"
               />
-              <button onClick={() => { if (nombreEdit.trim()) { onCambiar({ nombre: nombreEdit.trim() }) }; setRenombrando(false) }} className="text-emerald-400/80 hover:text-emerald-400"><Check className="w-4 h-4" /></button>
+              <button onClick={() => { if (nombreEdit.trim()) { renombrar(nombreEdit.trim()) }; setRenombrando(false) }} className="text-emerald-400/80 hover:text-emerald-400"><Check className="w-4 h-4" /></button>
               <button onClick={() => { setNombreEdit(seccion.nombre); setRenombrando(false) }} className="text-white/30 hover:text-white/60"><X className="w-4 h-4" /></button>
             </div>
           ) : (

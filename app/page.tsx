@@ -7,7 +7,7 @@ import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
 import SeccionesView from '@/components/SeccionesView'
 import GuardarEnSeccion from '@/components/GuardarEnSeccion'
-import type { RecomendacionNueva, Material, ItemPedidoUnificado, SeleccionPedido, ProveedorSimple } from '@/lib/types'
+import type { RecomendacionNueva, Material, ItemPedidoUnificado, SeleccionPedido, ProveedorSimple, PrecioHistorico } from '@/lib/types'
 import {
   PackageSearch,
   AlertCircle,
@@ -66,10 +66,33 @@ export default function HomePage() {
   const [consultaActual, setConsultaActual] = useState<string>('')
   const [solicitudExpandida, setSolicitudExpandida] = useState(false)
   const [vista, setVista] = useState<'asistente' | 'secciones'>('asistente')
+  const [preciosNube, setPreciosNube] = useState<Map<string, PrecioHistorico>>(new Map())
 
   useEffect(() => {
     fetch('/api/dbstats').then(r => r.json()).then(setDbStats).catch(() => {})
     fetch('/api/proveedores').then(r => r.json()).then(setProveedoresDB).catch(() => {})
+
+    // Últimos precios pagados por SAP (Google Sheet "historico vidal")
+    fetch('/api/historico').then(r => r.json()).then(d => {
+      if (!Array.isArray(d?.rows)) return
+      const m = new Map<string, PrecioHistorico>()
+      for (const r of d.rows) {
+        if (r.estado === 'borrada' || !r.sap || r.precio_unitario == null) continue
+        const sap = String(r.sap)
+        const prev = m.get(sap)
+        if (!prev || r.fecha > prev.fecha) m.set(sap, { precio: r.precio_unitario, fecha: r.fecha, proveedor: r.proveedor || '' })
+      }
+      setPreciosNube(m)
+    }).catch(() => {})
+
+    // Consultas recientes persistentes
+    try {
+      const raw = localStorage.getItem('cv_consultas_v1')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) setConsultas(parsed.filter((c) => typeof c === 'string').slice(0, 5))
+      }
+    } catch {}
   }, [])
 
   const addLog = (paso: Paso, texto: string, ok: boolean) =>
@@ -137,7 +160,11 @@ export default function HomePage() {
 
         setRecomendaciones(recs)
         setSelecciones(construirSeleccionInicial(recs, unificado))
-        setConsultas(prev => [consulta, ...prev].slice(0, 5))
+        setConsultas(prev => {
+          const next = [consulta, ...prev.filter(c => c !== consulta)].slice(0, 5)
+          try { localStorage.setItem('cv_consultas_v1', JSON.stringify(next)) } catch {}
+          return next
+        })
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Error desconocido'
         addLog(pasoActual, msg, false)
@@ -341,6 +368,7 @@ export default function HomePage() {
                       onToggle={handleToggle}
                       onSelChange={(cambios) => actualizarSeleccion(i, cambios)}
                       proveedoresDB={proveedoresDB}
+                      preciosHistorico={preciosNube}
                     />
                   )
                 })}

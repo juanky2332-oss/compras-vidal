@@ -10,7 +10,8 @@ import { useState, useEffect } from 'react'
 import { Factory, Check, ChevronDown } from 'lucide-react'
 import type { SeleccionPedido } from '@/lib/types'
 import type { Seccion } from '@/lib/secciones'
-import { cargarSecciones, guardarSecciones, nuevoId, hoyISO } from '@/lib/secciones'
+import { cargarSecciones, guardarSecciones, nuevoId, hoyISO, compraAFila } from '@/lib/secciones'
+import { subirFilas } from '@/lib/syncHistorico'
 
 export default function GuardarEnSeccion({ selecciones }: { selecciones: SeleccionPedido[] }) {
   const [secciones, setSecciones] = useState<Seccion[]>([])
@@ -44,6 +45,8 @@ export default function GuardarEnSeccion({ selecciones }: { selecciones: Selecci
     )
     guardarSecciones(actualizadas)
     setSecciones(actualizadas)
+    // sincronizar con el Google Sheet (si falla, queda en cola de reintento)
+    void subirFilas(nuevas.map((c) => compraAFila(seccion.nombre, c)))
     setGuardadoEn(seccion.nombre)
     setAbierto(false)
     setTimeout(() => setGuardadoEn(null), 4000)

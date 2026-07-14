@@ -101,6 +101,105 @@ export function guardarSecciones(secciones: Seccion[]): void {
   }
 }
 
+// ── Sincronización con la nube (Google Sheets vía /api/historico) ────────
+//  Cada compra es una fila del sheet "historico vidal". El borrado es lógico
+//  (estado = 'borrada') para que el merge entre dispositivos sea seguro.
+
+export interface FilaHistorico {
+  id: string
+  seccion: string
+  fecha: string
+  sap: string
+  descripcion: string
+  cantidad: number
+  precio_unitario: number | null
+  proveedor: string
+  notas: string
+  estado: 'activa' | 'borrada'
+}
+
+export function compraAFila(seccionNombre: string, c: CompraSeccion, estado: 'activa' | 'borrada' = 'activa'): FilaHistorico {
+  return {
+    id: c.id,
+    seccion: seccionNombre,
+    fecha: c.fecha,
+    sap: c.sapCodigo,
+    descripcion: c.descripcion,
+    cantidad: c.cantidad,
+    precio_unitario: c.precioUnitario,
+    proveedor: c.proveedor,
+    notas: c.notas || '',
+    estado,
+  }
+}
+
+export function filaACompra(f: FilaHistorico): CompraSeccion {
+  return {
+    id: f.id,
+    fecha: f.fecha,
+    sapCodigo: f.sap,
+    descripcion: f.descripcion,
+    cantidad: f.cantidad,
+    precioUnitario: f.precio_unitario,
+    proveedor: f.proveedor,
+    notas: f.notas || undefined,
+  }
+}
+
+// Fusiona el estado local con las filas de la nube. La nube manda en las
+// compras que conoce; las compras solo-locales quedan pendientes de subir.
+export function reconciliarConNube(
+  local: Seccion[],
+  filas: FilaHistorico[]
+): { secciones: Seccion[]; pendientes: FilaHistorico[] } {
+  const borradas = new Set(filas.filter((f) => f.estado === 'borrada').map((f) => f.id))
+  const activas = filas.filter((f) => f.estado !== 'borrada' && f.id)
+  const idsNube = new Set(filas.map((f) => f.id))
+
+  const secciones: Seccion[] = local.map((s) => ({
+    ...s,
+    compras: s.compras.filter((c) => !borradas.has(c.id)),
+  }))
+
+  const porNombre = new Map<string, Seccion>()
+  for (const s of secciones) porNombre.set(s.nombre.trim().toLowerCase(), s)
+
+  for (const f of activas) {
+    const nombre = (f.seccion || 'General').trim()
+    let sec = porNombre.get(nombre.toLowerCase())
+    if (!sec) {
+      sec = {
+        id: nuevoId(),
+        nombre,
+        color: COLORES_SECCION[secciones.length % COLORES_SECCION.length],
+        compras: [],
+        creadaEn: new Date().toISOString(),
+      }
+      secciones.push(sec)
+      porNombre.set(nombre.toLowerCase(), sec)
+    }
+    // si la compra estaba en otra sección local (movida/renombrada en la nube), quitarla
+    for (const otra of secciones) {
+      if (otra !== sec) {
+        const i = otra.compras.findIndex((c) => c.id === f.id)
+        if (i >= 0) otra.compras.splice(i, 1)
+      }
+    }
+    const compra = filaACompra(f)
+    const idx = sec.compras.findIndex((c) => c.id === f.id)
+    if (idx >= 0) sec.compras[idx] = compra
+    else sec.compras.push(compra)
+  }
+
+  const pendientes: FilaHistorico[] = []
+  for (const s of secciones) {
+    for (const c of s.compras) {
+      if (!idsNube.has(c.id)) pendientes.push(compraAFila(s.nombre, c))
+    }
+  }
+  return { secciones, pendientes }
+}
+
 // ── Estadísticas ──────────────────────────────────────────────────────────
 
 export function statsSeccion(s: Seccion): {

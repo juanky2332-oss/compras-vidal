@@ -8,7 +8,8 @@ import {
   Target, GitCompare, Puzzle, HelpCircle,
   ChevronDown, ChevronUp,
 } from 'lucide-react'
-import type { RecomendacionNueva, SeleccionPedido, ProveedorSimple, SapSearchResult, TipoMatch } from '@/lib/types'
+import type { RecomendacionNueva, SeleccionPedido, ProveedorSimple, SapSearchResult, TipoMatch, PrecioHistorico } from '@/lib/types'
+import { fmtEUR, fmtFecha } from '@/lib/secciones'
 
 // ─────────────────────── CONFIG OBJECTS ────────────────────────
 
@@ -42,11 +43,12 @@ interface Props {
   onToggle: (index: number) => void
   onSelChange: (cambios: Partial<SeleccionPedido>) => void
   proveedoresDB?: ProveedorSimple[]
+  preciosHistorico?: Map<string, PrecioHistorico>
 }
 
 // ─────────────────────── MAIN CARD ──────────────────────────────
 
-export default function MaterialCard({ rec, sel, index, onToggle, onSelChange, proveedoresDB = [] }: Props) {
+export default function MaterialCard({ rec, sel, index, onToggle, onSelChange, proveedoresDB = [], preciosHistorico }: Props) {
   const cfg    = CONFIDENCE_CONFIG[rec.nivel_confianza]
   const matchC = rec.tipoMatch ? MATCH_CONFIG[rec.tipoMatch] : null
   const paso   = PASO_LABELS[rec._pasoDeterminante] || PASO_LABELS[5]
@@ -146,6 +148,7 @@ export default function MaterialCard({ rec, sel, index, onToggle, onSelChange, p
             saps={saps}
             selected={sel.sapElegido}
             selectedDescripcion={sel.sapDescripcion}
+            preciosHistorico={preciosHistorico}
             onChange={(codigo, descripcion, aproximado) =>
               onSelChange({ sapElegido: codigo, sapDescripcion: descripcion, sapAproximado: aproximado })
             }
@@ -333,11 +336,13 @@ function SapSelector({
   saps,
   selected,
   selectedDescripcion,
+  preciosHistorico,
   onChange,
 }: {
   saps: RecomendacionNueva['codigos_sap_sugeridos']
   selected: string
   selectedDescripcion?: string
+  preciosHistorico?: Map<string, PrecioHistorico>
   onChange: (codigo: string, descripcion: string, aproximado: boolean) => void
 }) {
   const [mostrarTodos, setMostrarTodos] = useState(false)
@@ -411,6 +416,7 @@ function SapSelector({
 
         {visibles.map((sap) => {
           const esCatalogo = !sap.proveedor && !!sap.nota?.includes('sin historial')
+          const precio = preciosHistorico?.get(sap.codigo)
           return (
             <button
               key={sap.codigo}
@@ -442,6 +448,15 @@ function SapSelector({
                   )}
                   {sap.proveedor && !esCatalogo && (
                     <span className="text-[10px] text-white/30">{sap.proveedor}</span>
+                  )}
+                  {precio && (
+                    <span
+                      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                      style={{ background: 'rgba(16,185,129,0.10)', color: 'rgba(52,211,153,0.85)', border: '1px solid rgba(16,185,129,0.22)' }}
+                      title={`Último precio pagado según tu histórico de secciones (${fmtFecha(precio.fecha)}${precio.proveedor ? ' · ' + precio.proveedor : ''})`}
+                    >
+                      {fmtEUR(precio.precio)}/ud · {fmtFecha(precio.fecha)}
+                    </span>
                   )}
                 </div>
                 <p className="text-xs text-white/45 mt-0.5 leading-snug">{sap.descripcion}</p>

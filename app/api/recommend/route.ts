@@ -95,27 +95,39 @@ PASO 2 — Genera entre 5 y 8 BÚSQUEDAS abreviadas estilo SAP (como teclearía 
 • Si la medida admite dos sistemas (DN50 = 2", NW40 = 1½"), genera variantes con ambos
 • PROHIBIDO: inventar referencias, códigos SAP o marcas no mencionadas explícitamente
 
-Devuelve SOLO un JSON sin texto adicional:
-{"variantes": ["búsqueda1", "búsqueda2", "búsqueda3", "búsqueda4", "búsqueda5"]}`
+Recibirás VARIOS materiales numerados. Genera las variantes de CADA uno.
+Devuelve SOLO un JSON sin texto adicional, con una entrada por material:
+{"items": [{"indice": 0, "variantes": ["búsqueda1", "búsqueda2", "búsqueda3"]}, {"indice": 1, "variantes": ["..."]}]}`
 
-async function generarVariantes(descripcion: string): Promise<string[]> {
+// Una sola llamada para todos los materiales del pedido: menos latencia y coste
+// que una llamada por material. Si falla, el algoritmo busca sin variantes.
+async function generarVariantesBatch(materiales: Material[]): Promise<Record<number, string[]>> {
   try {
+    const lista = materiales.map((m, i) => `${i}. "${m.descripcion}"`).join('\n')
     const resp = await getOpenAI().chat.completions.create({
       model: MODELO_RAPIDO,
       messages: [
         { role: 'system', content: PROMPT_VARIANTES },
-        { role: 'user', content: `Material: "${descripcion}"` },
+        { role: 'user', content: `Materiales:\n${lista}` },
       ],
       response_format: { type: 'json_object' },
-      max_tokens: 300,
+      max_tokens: Math.min(300 * materiales.length, 2500),
       temperature: 0.3,
     })
     const content = resp.choices[0]?.message?.content || '{}'
-    const parsed = JSON.parse(content) as { variantes?: string[] }
-    const variantes = Array.isArray(parsed.variantes) ? parsed.variantes.filter((v) => typeof v === 'string' && v.trim()) : []
-    return variantes.slice(0, 7)
+    const parsed = JSON.parse(content) as { items?: Array<{ indice?: number; variantes?: string[] }> }
+    const map: Record<number, string[]> = {}
+    for (const item of parsed.items || []) {
+      const idx = Number(item?.indice)
+      if (!Number.isInteger(idx) || idx < 0 || idx >= materiales.length) continue
+      const variantes = Array.isArray(item.variantes)
+        ? item.variantes.filter((v) => typeof v === 'string' && v.trim())
+        : []
+      map[idx] = variantes.slice(0, 7)
+    }
+    return map
   } catch {
-    return [] // si falla, el algoritmo usa solo la descripción normal
+    return {}
   }
 }
 
@@ -214,13 +226,10 @@ function limpiarTextoInterno(s: string): string {
     .trim()
 }
 
-async function procesarMaterial(material: Material, index: number, total: number): Promise<RecomendacionNueva> {
+async function procesarMaterial(material: Material, index: number, total: number, variantes: string[]): Promise<RecomendacionNueva> {
   const db = loadDb()
 
-  // 1) La IA genera variantes de búsqueda estilo SAP
-  const variantes = await generarVariantes(material.descripcion)
-
-  // 2) El motor busca usando esas variantes
+  // El motor busca usando las variantes generadas en batch por la IA
   const resultado = ejecutarAlgoritmo(material.descripcion, db, variantes)
 
   const contextoAlgoritmo = {
@@ -348,10 +357,38 @@ export async function POST(req: NextRequest) {
     if (!materiales?.length) {
       return NextResponse.json({ recomendaciones: [], pedidoUnificado: [] })
     }
+    if (materiales.length > 25) {
+      return NextResponse.json({ error: 'Máximo 25 materiales por consulta' }, { status: 400 })
+    }
 
-    const recomendaciones = await Promise.all(
-      materiales.map((m, i) => procesarMaterial(m, i, materiales.length))
+    // 1) Variantes de búsqueda de TODOS los materiales en una sola llamada
+    const variantesMap = await generarVariantesBatch(materiales)
+
+    // 2) allSettled: si un material falla, los demás se devuelven igualmente
+    const settled = await Promise.allSettled(
+      materiales.map((m, i) => procesarMaterial(m, i, materiales.length, variantesMap[i] || []))
     )
+    const recomendaciones: RecomendacionNueva[] = settled.map((res, i) => {
+      if (res.status === 'fulfilled') return res.value
+      console.error(`Recommend: material ${i} falló:`, res.reason)
+      const m = materiales[i]
+      return {
+        cantidad: m.cantidad,
+        material_detectado: `${m.cantidad}x ${m.descripcion}`,
+        descripcion: m.descripcion,
+        categoria: '',
+        tipo_material: 'No analizado',
+        marca_detectada: 'no especificada',
+        proveedor_recomendado: { nombre: 'Sin datos', codigo: '' },
+        alternativas: [],
+        codigos_sap_sugeridos: [],
+        nivel_confianza: 'BAJO',
+        motivo: 'No se pudo analizar este material por un error temporal. Repite la consulta solo con esta línea.',
+        observaciones: '',
+        seleccionado: false,
+        _pasoDeterminante: 5,
+      }
+    })
 
     // UNIFICACIÓN DE PEDIDO POR PROVEEDOR (mismo tipo de material → un solo proveedor)
     const items: ItemPedido[] = recomendaciones.map((r) => ({

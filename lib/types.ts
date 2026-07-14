@@ -68,6 +68,13 @@ export interface ProveedorSimple {
   nombre: string
 }
 
+// Último precio pagado por un SAP según el histórico de secciones (Google Sheet)
+export interface PrecioHistorico {
+  precio: number
+  fecha: string      // 'YYYY-MM-DD'
+  proveedor: string
+}
+
 export interface SapSearchResult {
   codigo: string
   descripcion: string
