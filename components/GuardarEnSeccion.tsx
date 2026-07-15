@@ -11,11 +11,13 @@ import { Factory, Check, ChevronDown } from 'lucide-react'
 import type { SeleccionPedido } from '@/lib/types'
 import type { Seccion } from '@/lib/secciones'
 import { cargarSecciones, guardarSecciones, nuevoId, hoyISO, compraAFila } from '@/lib/secciones'
+import { EMPRESAS, EMPRESA_DEFAULT, empresaInfo } from '@/lib/empresas'
 import { subirFilas } from '@/lib/syncHistorico'
 
 export default function GuardarEnSeccion({ selecciones }: { selecciones: SeleccionPedido[] }) {
   const [secciones, setSecciones] = useState<Seccion[]>([])
   const [abierto, setAbierto] = useState(false)
+  const [empresa, setEmpresa] = useState(EMPRESA_DEFAULT)
   const [guardadoEn, setGuardadoEn] = useState<string | null>(null)
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export default function GuardarEnSeccion({ selecciones }: { selecciones: Selecci
       cantidad: sel.cantidad,
       precioUnitario: null, // el precio aproximado se completa después en la vista Secciones
       proveedor: sel.proveedorNombre || '',
+      empresa,
     }))
     const actualizadas = actuales.map((s) =>
       s.id === seccionId ? { ...s, compras: [...s.compras, ...nuevas] } : s
@@ -67,6 +70,19 @@ export default function GuardarEnSeccion({ selecciones }: { selecciones: Selecci
             Registra {incluidas.length} línea{incluidas.length !== 1 ? 's' : ''} en el histórico del departamento (el precio se completa después)
           </p>
         </div>
+
+        {/* Empresa del grupo a la que va la compra */}
+        {!guardadoEn && (
+          <select
+            value={empresa}
+            onChange={(e) => setEmpresa(e.target.value)}
+            title="Empresa del grupo para la que se compra"
+            className="text-xs font-semibold bg-transparent rounded-lg px-2 py-2 outline-none cursor-pointer [color-scheme:dark]"
+            style={{ color: empresaInfo(empresa).color, border: `1px solid ${empresaInfo(empresa).color}40`, background: `${empresaInfo(empresa).color}0d` }}
+          >
+            {EMPRESAS.map((e) => <option key={e.nombre} value={e.nombre}>{e.corto}</option>)}
+          </select>
+        )}
 
         {guardadoEn ? (
           <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25">

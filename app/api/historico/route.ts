@@ -22,6 +22,7 @@ function normalizarFila(r: any) {
     cantidad: Number(r?.cantidad) || 0,
     precio_unitario: precio != null && !isNaN(precio) ? precio : null,
     proveedor: String(r?.proveedor ?? ''),
+    empresa: String(r?.empresa ?? ''),
     notas: String(r?.notas ?? ''),
     estado: r?.estado === 'borrada' ? ('borrada' as const) : ('activa' as const),
   }

@@ -19,6 +19,7 @@ import {
   compraAFila, reconciliarConNube,
 } from '@/lib/secciones'
 import { listarNube, subirFilas, cargarPendientes } from '@/lib/syncHistorico'
+import { EMPRESAS, EMPRESA_DEFAULT, empresaInfo, normalizarEmpresa } from '@/lib/empresas'
 import type { SapSearchResult } from '@/lib/types'
 
 type EstadoSync = 'cargando' | 'ok' | 'sin-nube' | 'error'
@@ -298,7 +299,8 @@ function SeccionDetalle({
     const base = [...seccion.compras].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id))
     if (!q) return base
     return base.filter((c) =>
-      c.descripcion.toLowerCase().includes(q) || c.sapCodigo.includes(q) || (c.proveedor || '').toLowerCase().includes(q)
+      c.descripcion.toLowerCase().includes(q) || c.sapCodigo.includes(q) ||
+      (c.proveedor || '').toLowerCase().includes(q) || normalizarEmpresa(c.empresa).toLowerCase().includes(q)
     )
   }, [seccion.compras, filtro])
 
@@ -493,6 +495,7 @@ function ModoBtn({ activo, onClick, icon: Icon, label }: { activo: boolean; onCl
 
 function FormNuevaCompra({ color, onAñadir }: { color: string; onAñadir: (c: Omit<CompraSeccion, 'id'>) => void }) {
   const [fecha, setFecha] = useState(hoyISO())
+  const [empresa, setEmpresa] = useState(EMPRESA_DEFAULT)
   const [sap, setSap] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [cantidad, setCantidad] = useState('1')
@@ -539,8 +542,9 @@ function FormNuevaCompra({ color, onAñadir }: { color: string; onAñadir: (c: O
       cantidad: Math.max(1, Math.round(Number(cantidad) || 1)),
       precioUnitario: precioNum != null && !isNaN(precioNum) && precioNum >= 0 ? precioNum : null,
       proveedor: proveedor.trim(),
+      empresa,
     })
-    // Mantener la fecha, limpiar el resto para encadenar entradas rápidas
+    // Mantener fecha y empresa, limpiar el resto para encadenar entradas rápidas
     setSap(''); setDescripcion(''); setCantidad('1'); setPrecio(''); setProveedor('')
     setSugerencias([]); setMostrarSug(false)
   }
@@ -560,6 +564,17 @@ function FormNuevaCompra({ color, onAñadir }: { color: string; onAñadir: (c: O
             type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
             className="w-full text-xs text-white/75 bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 outline-none focus:border-white/25 [color-scheme:dark]"
           />
+        </div>
+
+        {/* Empresa del grupo */}
+        <div className="sm:col-span-2">
+          <label className="text-[9px] text-white/28 uppercase tracking-wider block mb-1">Empresa</label>
+          <select
+            value={empresa} onChange={(e) => setEmpresa(e.target.value)}
+            className="w-full text-xs text-white/75 bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 outline-none focus:border-white/25 [color-scheme:dark]"
+          >
+            {EMPRESAS.map((e) => <option key={e.nombre} value={e.nombre}>{e.corto}</option>)}
+          </select>
         </div>
 
         {/* SAP con autocompletado */}
@@ -593,7 +608,7 @@ function FormNuevaCompra({ color, onAñadir }: { color: string; onAñadir: (c: O
         </div>
 
         {/* Descripción */}
-        <div className="col-span-2 sm:col-span-3">
+        <div className="col-span-2 sm:col-span-6">
           <label className="text-[9px] text-white/28 uppercase tracking-wider block mb-1">Descripción *</label>
           <input
             value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
@@ -603,7 +618,7 @@ function FormNuevaCompra({ color, onAñadir }: { color: string; onAñadir: (c: O
         </div>
 
         {/* Cantidad */}
-        <div className="sm:col-span-1">
+        <div className="sm:col-span-2">
           <label className="text-[9px] text-white/28 uppercase tracking-wider block mb-1">Cant.</label>
           <input
             type="number" min={1} value={cantidad} onChange={(e) => setCantidad(e.target.value)}
@@ -612,7 +627,7 @@ function FormNuevaCompra({ color, onAñadir }: { color: string; onAñadir: (c: O
         </div>
 
         {/* Precio */}
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-3">
           <label className="text-[9px] text-white/28 uppercase tracking-wider block mb-1">€/ud. aprox</label>
           <input
             value={precio} onChange={(e) => setPrecio(e.target.value)}
@@ -623,7 +638,7 @@ function FormNuevaCompra({ color, onAñadir }: { color: string; onAñadir: (c: O
         </div>
 
         {/* Proveedor */}
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-7">
           <label className="text-[9px] text-white/28 uppercase tracking-wider block mb-1">Proveedor</label>
           <input
             value={proveedor} onChange={(e) => setProveedor(e.target.value)}
@@ -679,6 +694,7 @@ function FilaCompra({
 }) {
   const [confirmar, setConfirmar] = useState(false)
   const total = c.precioUnitario != null ? c.precioUnitario * c.cantidad : null
+  const emp = empresaInfo(c.empresa)
 
   return (
     <div className="px-4 py-2.5 flex items-center gap-3 group">
@@ -690,6 +706,18 @@ function FilaCompra({
         <p className="text-xs text-white/70 truncate" title={c.descripcion}>{c.descripcion}</p>
         {c.proveedor && <p className="text-[10px] text-white/28 truncate">{c.proveedor}</p>}
       </div>
+
+      {/* Empresa del grupo (editable) */}
+      <select
+        value={emp.nombre}
+        onChange={(e) => onActualizar(c.id, { empresa: e.target.value })}
+        title={`Empresa: ${emp.nombre}`}
+        className="w-[92px] text-[10px] font-semibold bg-transparent rounded-lg px-1.5 py-1 outline-none cursor-pointer shrink-0 transition-colors [color-scheme:dark]"
+        style={{ color: emp.color, border: `1px solid ${emp.color}35`, background: `${emp.color}0d` }}
+      >
+        {EMPRESAS.map((e) => <option key={e.nombre} value={e.nombre}>{e.corto}</option>)}
+        {!EMPRESAS.some((e) => e.nombre === emp.nombre) && <option value={emp.nombre}>{emp.corto}</option>}
+      </select>
 
       {/* Cantidad editable */}
       <input

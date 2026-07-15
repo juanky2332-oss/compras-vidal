@@ -6,6 +6,7 @@ import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
 import SeccionesView from '@/components/SeccionesView'
+import DashboardView from '@/components/DashboardView'
 import GuardarEnSeccion from '@/components/GuardarEnSeccion'
 import type { RecomendacionNueva, Material, ItemPedidoUnificado, SeleccionPedido, ProveedorSimple, PrecioHistorico } from '@/lib/types'
 import {
@@ -23,6 +24,7 @@ import {
   ChevronUp,
   Sparkles,
   Factory,
+  BarChart3,
 } from 'lucide-react'
 
 type Paso = 'ocr' | 'extraccion' | 'busqueda' | 'razonamiento' | null
@@ -65,7 +67,7 @@ export default function HomePage() {
   const [consultas, setConsultas] = useState<string[]>([])
   const [consultaActual, setConsultaActual] = useState<string>('')
   const [solicitudExpandida, setSolicitudExpandida] = useState(false)
-  const [vista, setVista] = useState<'asistente' | 'secciones'>('asistente')
+  const [vista, setVista] = useState<'asistente' | 'secciones' | 'dashboard'>('asistente')
   const [preciosNube, setPreciosNube] = useState<Map<string, PrecioHistorico>>(new Map())
 
   useEffect(() => {
@@ -232,9 +234,20 @@ export default function HomePage() {
           >
             <Factory className="w-3.5 h-3.5" /> Secciones
           </button>
+          <button
+            onClick={() => setVista('dashboard')}
+            className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-lg transition-all"
+            style={{
+              background: vista === 'dashboard' ? 'rgba(251,191,36,0.12)' : 'transparent',
+              color: vista === 'dashboard' ? 'rgba(252,211,77,0.95)' : 'rgba(255,255,255,0.35)',
+            }}
+          >
+            <BarChart3 className="w-3.5 h-3.5" /> Dashboard
+          </button>
         </div>
 
         {vista === 'secciones' && <SeccionesView />}
+        {vista === 'dashboard' && <DashboardView />}
 
         <div className={vista === 'asistente' ? '' : 'hidden'}>
 

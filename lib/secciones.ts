@@ -4,6 +4,8 @@
 //  Exportable/importable como JSON para copia de seguridad o cambio de equipo.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { normalizarEmpresa } from './empresas'
+
 export interface CompraSeccion {
   id: string
   fecha: string              // 'YYYY-MM-DD'
@@ -12,6 +14,7 @@ export interface CompraSeccion {
   cantidad: number
   precioUnitario: number | null  // precio aproximado por unidad (€); null = pendiente
   proveedor: string
+  empresa?: string           // empresa del grupo (vacío = VIDAL GOLOSINAS)
   notas?: string
 }
 
@@ -114,6 +117,7 @@ export interface FilaHistorico {
   cantidad: number
   precio_unitario: number | null
   proveedor: string
+  empresa: string
   notas: string
   estado: 'activa' | 'borrada'
 }
@@ -128,6 +132,7 @@ export function compraAFila(seccionNombre: string, c: CompraSeccion, estado: 'ac
     cantidad: c.cantidad,
     precio_unitario: c.precioUnitario,
     proveedor: c.proveedor,
+    empresa: normalizarEmpresa(c.empresa),
     notas: c.notas || '',
     estado,
   }
@@ -142,6 +147,7 @@ export function filaACompra(f: FilaHistorico): CompraSeccion {
     cantidad: f.cantidad,
     precioUnitario: f.precio_unitario,
     proveedor: f.proveedor,
+    empresa: f.empresa || undefined,
     notas: f.notas || undefined,
   }
 }
@@ -296,12 +302,13 @@ function descargarFichero(nombre: string, contenido: string, mime: string) {
 
 export function exportarCSVSeccion(s: Seccion): void {
   const filas = [
-    ['Fecha', 'Código SAP', 'Descripción', 'Cantidad', 'Precio unit. (€)', 'Total (€)', 'Proveedor', 'Notas'].join(';'),
+    ['Fecha', 'Empresa', 'Código SAP', 'Descripción', 'Cantidad', 'Precio unit. (€)', 'Total (€)', 'Proveedor', 'Notas'].join(';'),
     ...[...s.compras]
       .sort((a, b) => b.fecha.localeCompare(a.fecha))
       .map((c) =>
         [
           fmtFecha(c.fecha),
+          `"${normalizarEmpresa(c.empresa).replace(/"/g, '""')}"`,
           c.sapCodigo,
           `"${c.descripcion.replace(/"/g, '""')}"`,
           c.cantidad,
