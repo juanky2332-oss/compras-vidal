@@ -155,7 +155,7 @@ export default function MaterialCard({ rec, sel, index, onToggle, onSelChange, p
           />
 
           {/* CANTIDAD */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs text-white/35 uppercase tracking-widest">Cantidad</span>
             <input
               type="number"
@@ -164,6 +164,19 @@ export default function MaterialCard({ rec, sel, index, onToggle, onSelChange, p
               onChange={(e) => onSelChange({ cantidad: Math.max(1, Number(e.target.value) || 1) })}
               className="w-16 text-sm text-white/80 bg-white/[0.04] border border-white/10 rounded-lg px-2 py-1.5 text-center focus:outline-none focus:border-violet-400/40 transition-colors"
             />
+            {(() => {
+              const precio = sel.sapElegido ? preciosHistorico?.get(sel.sapElegido) : undefined
+              if (!precio) return null
+              return (
+                <span
+                  className="text-xs font-medium px-2 py-1 rounded-lg"
+                  style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)', color: 'rgba(52,211,153,0.85)' }}
+                  title={`Último precio pagado: ${fmtEUR(precio.precio)}/ud (${fmtFecha(precio.fecha)}${precio.proveedor ? ' · ' + precio.proveedor : ''})`}
+                >
+                  ≈ {fmtEUR(precio.precio * sel.cantidad)} total
+                </span>
+              )
+            })()}
             {sel.sapAproximado && (
               <span className="text-xs text-amber-400/70 flex items-center gap-1">
                 <AlertTriangle className="w-3.5 h-3.5" /> Código aproximado — verifica medida

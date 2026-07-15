@@ -14,7 +14,7 @@ import { cargarSecciones, guardarSecciones, nuevoId, hoyISO, compraAFila } from 
 import { EMPRESAS, EMPRESA_DEFAULT, empresaInfo } from '@/lib/empresas'
 import { subirFilas } from '@/lib/syncHistorico'
 
-export default function GuardarEnSeccion({ selecciones }: { selecciones: SeleccionPedido[] }) {
+export default function GuardarEnSeccion({ selecciones, solicitudCompra }: { selecciones: SeleccionPedido[]; solicitudCompra?: string }) {
   const [secciones, setSecciones] = useState<Seccion[]>([])
   const [abierto, setAbierto] = useState(false)
   const [empresa, setEmpresa] = useState(EMPRESA_DEFAULT)
@@ -42,6 +42,8 @@ export default function GuardarEnSeccion({ selecciones }: { selecciones: Selecci
       precioUnitario: null, // el precio aproximado se completa después en la vista Secciones
       proveedor: sel.proveedorNombre || '',
       empresa,
+      // trazabilidad: enlaza la línea del histórico con la solicitud de compra SAP
+      notas: solicitudCompra?.trim() ? `SC ${solicitudCompra.trim()}` : undefined,
     }))
     const actualizadas = actuales.map((s) =>
       s.id === seccionId ? { ...s, compras: [...s.compras, ...nuevas] } : s

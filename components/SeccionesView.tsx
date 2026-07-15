@@ -704,7 +704,13 @@ function FilaCompra({
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-white/70 truncate" title={c.descripcion}>{c.descripcion}</p>
-        {c.proveedor && <p className="text-[10px] text-white/28 truncate">{c.proveedor}</p>}
+        {(c.proveedor || c.notas) && (
+          <p className="text-[10px] text-white/28 truncate">
+            {c.proveedor}
+            {c.proveedor && c.notas ? ' · ' : ''}
+            {c.notas && <span className="text-indigo-300/45" title={c.notas}>{c.notas}</span>}
+          </p>
+        )}
       </div>
 
       {/* Empresa del grupo (editable) */}

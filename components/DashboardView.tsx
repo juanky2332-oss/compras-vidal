@@ -11,6 +11,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   Coins, Package, Layers3, Truck, TrendingUp, TrendingDown, Minus,
   Building2, Factory, Clock, FileSpreadsheet, RefreshCw, CloudOff, BarChart3,
+  AlertTriangle, BellRing,
 } from 'lucide-react'
 import type { Seccion, CompraSeccion } from '@/lib/secciones'
 import {
@@ -207,6 +208,73 @@ export default function DashboardView() {
     [filtradas]
   )
 
+  // ── Avisos inteligentes: precios que se mueven, huecos y oportunidades ──
+  const avisos = useMemo(() => {
+    interface Aviso { tipo: 'subida' | 'ahorro' | 'multiprov' | 'sinprecio'; titulo: string; detalle: string; color: string }
+    const out: Aviso[] = []
+
+    const preciosPorSap = new Map<string, Array<{ fecha: string; precio: number; desc: string; proveedor: string }>>()
+    const provPorSap = new Map<string, { provs: Set<string>; desc: string }>()
+    for (const c of filtradas) {
+      if (!c.sapCodigo) continue
+      if (c.proveedor.trim()) {
+        const e = provPorSap.get(c.sapCodigo) || { provs: new Set<string>(), desc: c.descripcion }
+        e.provs.add(c.proveedor.trim().toUpperCase())
+        if (c.descripcion) e.desc = c.descripcion
+        provPorSap.set(c.sapCodigo, e)
+      }
+      if (c.precioUnitario != null && c.precioUnitario > 0) {
+        const arr = preciosPorSap.get(c.sapCodigo) || []
+        arr.push({ fecha: c.fecha, precio: c.precioUnitario, desc: c.descripcion, proveedor: c.proveedor })
+        preciosPorSap.set(c.sapCodigo, arr)
+      }
+    }
+
+    for (const [sap, arr] of Array.from(preciosPorSap.entries())) {
+      if (arr.length < 2) continue
+      arr.sort((a, b) => a.fecha.localeCompare(b.fecha))
+      const ult = arr[arr.length - 1]
+      const ant = arr[arr.length - 2]
+      if (ult.precio === ant.precio) continue
+      const pct = ((ult.precio - ant.precio) / ant.precio) * 100
+      const nombre = ult.desc || sap
+      if (pct >= 10) {
+        out.push({
+          tipo: 'subida', color: '#fb7185',
+          titulo: `${nombre} — precio +${pct.toFixed(0)}%`,
+          detalle: `De ${fmtEUR(ant.precio)} a ${fmtEUR(ult.precio)}/ud el ${fmtFecha(ult.fecha)}${ult.proveedor ? ' · ' + ult.proveedor : ''}. Revisa con el proveedor o busca alternativa.`,
+        })
+      } else if (pct <= -10) {
+        out.push({
+          tipo: 'ahorro', color: '#34d399',
+          titulo: `${nombre} — precio ${pct.toFixed(0)}%`,
+          detalle: `De ${fmtEUR(ant.precio)} a ${fmtEUR(ult.precio)}/ud el ${fmtFecha(ult.fecha)}${ult.proveedor ? ' · ' + ult.proveedor : ''}.`,
+        })
+      }
+    }
+
+    for (const [, e] of Array.from(provPorSap.entries())) {
+      if (e.provs.size < 2) continue
+      out.push({
+        tipo: 'multiprov', color: '#fbbf24',
+        titulo: `${e.desc} se compra a ${e.provs.size} proveedores`,
+        detalle: `${Array.from(e.provs).slice(0, 3).join(', ')} — compara precios y unifica si conviene.`,
+      })
+    }
+
+    const sinPrecio = filtradas.filter((c) => c.precioUnitario == null).length
+    if (sinPrecio > 0) {
+      out.push({
+        tipo: 'sinprecio', color: '#a1a1aa',
+        titulo: `${sinPrecio} compra${sinPrecio !== 1 ? 's' : ''} sin precio registrado`,
+        detalle: 'Complétalo en Secciones: mejora el gasto real del dashboard y activa los avisos de precio.',
+      })
+    }
+
+    const orden: Record<Aviso['tipo'], number> = { subida: 0, multiprov: 1, ahorro: 2, sinprecio: 3 }
+    return out.sort((a, b) => orden[a.tipo] - orden[b.tipo]).slice(0, 6)
+  }, [filtradas])
+
   // ── Export CSV global (filtro aplicado) ─────────────────────────────────
   const exportarCSV = () => {
     const filas = [
@@ -307,6 +375,29 @@ export default function DashboardView() {
             <Kpi icon={Truck} label="Proveedores" valor={String(kpis.proveedores)} acento="#fbbf24" />
             <KpiMes gastoMes={kpis.gastoMes} comprasMes={kpis.comprasMes} delta={kpis.delta} />
           </div>
+
+          {/* Avisos inteligentes */}
+          {avisos.length > 0 && (
+            <div className="mb-4">
+              <Panel titulo="Avisos" icono={BellRing}>
+                <div className="space-y-2">
+                  {avisos.map((a, i) => {
+                    const Icono = a.tipo === 'subida' ? TrendingUp : a.tipo === 'ahorro' ? TrendingDown : a.tipo === 'multiprov' ? Truck : AlertTriangle
+                    return (
+                      <div key={i} className="flex items-start gap-3 px-3 py-2.5 rounded-xl border"
+                        style={{ borderColor: `${a.color}25`, background: `${a.color}08` }}>
+                        <Icono className="w-4 h-4 shrink-0 mt-0.5" style={{ color: a.color }} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate" style={{ color: a.color }} title={a.titulo}>{a.titulo}</p>
+                          <p className="text-[11px] text-white/40 leading-relaxed">{a.detalle}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Panel>
+            </div>
+          )}
 
           {/* Evolución mensual */}
           <Panel titulo={metrica === 'gasto' ? 'Gasto por mes' : 'Compras por mes'} icono={BarChart3}

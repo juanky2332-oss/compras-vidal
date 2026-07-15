@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { Paperclip, X, Loader2, ImageIcon, Sparkles } from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
+import { Paperclip, X, Loader2, ImageIcon, Sparkles, Mic, MicOff } from 'lucide-react'
 import Image from 'next/image'
 
 interface InputZoneProps {
@@ -10,12 +10,35 @@ interface InputZoneProps {
   historicoCargado: boolean
 }
 
-export default function InputZone({ onAnalizar, cargando, historicoCargado }: InputZoneProps) {
+// Ejemplos reales del día a día para arrancar de un clic
+const EJEMPLOS = [
+  '2 rodamientos 6204-2RS FAG',
+  'Válvula de bola inox GENEBRE DN50',
+  '5 m tubo inox A-316 Ø50 SCH-10',
+  'Correa trapezoidal SPZ 1250',
+]
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function getSpeechRecognition(): any {
+  if (typeof window === 'undefined') return null
+  return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null
+}
+
+export default function InputZone({ onAnalizar, cargando }: InputZoneProps) {
   const [texto, setTexto] = useState('')
   const [imagen, setImagen] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [arrastrando, setArrastrando] = useState(false)
+  const [escuchando, setEscuchando] = useState(false)
+  const [hayVoz, setHayVoz] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const recogRef = useRef<any>(null)
+
+  useEffect(() => {
+    setHayVoz(!!getSpeechRecognition())
+    return () => { try { recogRef.current?.stop() } catch {} }
+  }, [])
 
   const handleImagen = (file: File) => {
     if (!file.type.startsWith('image/')) return
@@ -33,6 +56,7 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
 
   const handleSubmit = () => {
     if ((!texto.trim() && !imagen) || cargando) return
+    try { recogRef.current?.stop() } catch {}
     onAnalizar(texto.trim(), imagen)
     setTexto('')
     removeImagen()
@@ -56,6 +80,10 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
 
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setTexto(e.target.value)
+    autoAlto()
+  }
+
+  const autoAlto = () => {
     const ta = textareaRef.current
     if (ta) {
       ta.style.height = 'auto'
@@ -63,14 +91,62 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
     }
   }
 
+  const usarEjemplo = (ej: string) => {
+    setTexto(ej)
+    setTimeout(() => { textareaRef.current?.focus(); autoAlto() }, 0)
+  }
+
+  // ── Dictado por voz (es-ES, si el navegador lo soporta) ─────────────────
+  const toggleVoz = () => {
+    if (escuchando) {
+      try { recogRef.current?.stop() } catch {}
+      setEscuchando(false)
+      return
+    }
+    const SR = getSpeechRecognition()
+    if (!SR) return
+    const recog = new SR()
+    recog.lang = 'es-ES'
+    recog.continuous = true
+    recog.interimResults = false
+    recog.onresult = (ev: any) => {
+      let dictado = ''
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) dictado += ev.results[i][0].transcript
+      }
+      if (dictado.trim()) {
+        setTexto((prev) => (prev.trim() ? prev.trimEnd() + ' ' : '') + dictado.trim())
+        setTimeout(autoAlto, 0)
+      }
+    }
+    recog.onend = () => setEscuchando(false)
+    recog.onerror = () => setEscuchando(false)
+    recogRef.current = recog
+    try {
+      recog.start()
+      setEscuchando(true)
+    } catch { setEscuchando(false) }
+  }
+
   return (
     <div>
       {/* Card principal */}
       <div
-        className="rounded-2xl overflow-hidden transition-all duration-300"
+        onDragOver={(e) => { e.preventDefault(); if (!cargando) setArrastrando(true) }}
+        onDragLeave={() => setArrastrando(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setArrastrando(false)
+          if (cargando) return
+          const f = e.dataTransfer.files?.[0]
+          if (f) handleImagen(f)
+        }}
+        className="relative rounded-2xl overflow-hidden transition-all duration-300"
         style={{
           background: 'rgba(255,255,255,0.028)',
-          border: cargando
+          border: arrastrando
+            ? '1px dashed rgba(52,211,153,0.6)'
+            : cargando
             ? '1px solid rgba(99,102,241,0.4)'
             : '1px solid rgba(255,255,255,0.09)',
           boxShadow: cargando
@@ -78,6 +154,16 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
             : '0 4px 24px rgba(0,0,0,0.3)',
         }}
       >
+        {/* Overlay al arrastrar imagen */}
+        {arrastrando && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(16,185,129,0.08)', backdropFilter: 'blur(2px)' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl" style={{ background: 'rgba(7,7,16,0.85)', border: '1px solid rgba(52,211,153,0.4)' }}>
+              <ImageIcon className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm text-emerald-300/90 font-medium">Suelta la foto — le paso OCR y saco los materiales</span>
+            </div>
+          </div>
+        )}
+
         {/* Preview imagen */}
         {preview && (
           <div className="px-5 pt-5">
@@ -107,7 +193,9 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="Escribe o pega aquí tu solicitud de compra y te busco el proveedor habitual con código SAP…"
+            placeholder={escuchando
+              ? 'Escuchando… dicta tu solicitud de compra'
+              : 'Escribe, pega o dicta tu solicitud de compra. También puedes arrastrar una foto del albarán o de la pieza…'}
             rows={3}
             className="w-full bg-transparent text-base text-white/85 placeholder-white/22 resize-none leading-relaxed"
             style={{ minHeight: '80px', maxHeight: '220px' }}
@@ -119,7 +207,7 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
         <div className="mx-5 h-px bg-white/[0.06]" />
 
         {/* Toolbar */}
-        <div className="px-5 py-3.5 flex items-center justify-between">
+        <div className="px-5 py-3.5 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2.5">
             <input
               ref={fileRef}
@@ -139,6 +227,22 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
               <Paperclip className="w-3.5 h-3.5" />
               <span>Imagen</span>
             </button>
+            {hayVoz && (
+              <button
+                onClick={toggleVoz}
+                disabled={cargando}
+                title={escuchando ? 'Parar dictado' : 'Dictar la solicitud por voz'}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: escuchando ? 'rgba(248,113,113,0.4)' : 'rgba(255,255,255,0.08)',
+                  background: escuchando ? 'rgba(248,113,113,0.08)' : 'transparent',
+                  color: escuchando ? '#f87171' : 'rgba(255,255,255,0.4)',
+                }}
+              >
+                {escuchando ? <MicOff className="w-3.5 h-3.5 animate-pulse" /> : <Mic className="w-3.5 h-3.5" />}
+                <span>{escuchando ? 'Escuchando…' : 'Dictar'}</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -170,6 +274,21 @@ export default function InputZone({ onAnalizar, cargando, historicoCargado }: In
         </div>
       </div>
 
+      {/* Ejemplos de un clic */}
+      {!texto && !imagen && !cargando && (
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-white/20 uppercase tracking-widest font-semibold">Prueba con:</span>
+          {EJEMPLOS.map((ej) => (
+            <button
+              key={ej}
+              onClick={() => usarEjemplo(ej)}
+              className="text-xs text-white/40 hover:text-white/70 px-2.5 py-1 rounded-full border border-white/08 hover:border-white/20 hover:bg-white/[0.03] transition-all"
+            >
+              {ej}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,35 +1,28 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import Header from '@/components/Header'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import Header, { type Vista } from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
 import SeccionesView from '@/components/SeccionesView'
 import DashboardView from '@/components/DashboardView'
 import GuardarEnSeccion from '@/components/GuardarEnSeccion'
+import ProgresoAnalisis, { type Paso, type LogEntry } from '@/components/ProgresoAnalisis'
 import type { RecomendacionNueva, Material, ItemPedidoUnificado, SeleccionPedido, ProveedorSimple, PrecioHistorico } from '@/lib/types'
+import { fmtEUR } from '@/lib/secciones'
 import {
-  PackageSearch,
   AlertCircle,
   RotateCcw,
-  Cpu,
-  ScanText,
-  BrainCircuit,
-  CheckCheck,
   FileText,
   X,
   BookOpen,
   ChevronDown,
   ChevronUp,
-  Sparkles,
-  Factory,
-  BarChart3,
+  Coins,
+  Building2,
 } from 'lucide-react'
 
-type Paso = 'ocr' | 'extraccion' | 'busqueda' | 'razonamiento' | null
-
-interface LogEntry { paso: Paso; texto: string; ok: boolean }
 interface DbStats { marcas: number; proveedores: number; saps: number }
 
 function construirSeleccionInicial(
@@ -67,7 +60,7 @@ export default function HomePage() {
   const [consultas, setConsultas] = useState<string[]>([])
   const [consultaActual, setConsultaActual] = useState<string>('')
   const [solicitudExpandida, setSolicitudExpandida] = useState(false)
-  const [vista, setVista] = useState<'asistente' | 'secciones' | 'dashboard'>('asistente')
+  const [vista, setVista] = useState<Vista>('asistente')
   const [preciosNube, setPreciosNube] = useState<Map<string, PrecioHistorico>>(new Map())
 
   useEffect(() => {
@@ -193,14 +186,29 @@ export default function HomePage() {
     setSolicitudExpandida(false)
   }
 
-  const PASOS_INFO = {
-    ocr:          { icon: ScanText,      label: 'OCR de imagen' },
-    extraccion:   { icon: Cpu,           label: 'Extrayendo materiales' },
-    busqueda:     { icon: PackageSearch, label: 'Consultando base de datos' },
-    razonamiento: { icon: BrainCircuit,  label: 'Analizando con IA' },
-  }
-
   const incluidas = selecciones.filter(s => s.incluido)
+
+  // Coste estimado del pedido según el último precio pagado (Google Sheet)
+  const costeEstimado = useMemo(() => {
+    let total = 0
+    let conPrecio = 0
+    for (const s of incluidas) {
+      const p = s.sapElegido ? preciosNube.get(s.sapElegido) : undefined
+      if (p) { total += p.precio * s.cantidad; conPrecio++ }
+    }
+    return { total, conPrecio }
+  }, [incluidas, preciosNube])
+
+  const numProveedores = useMemo(
+    () => new Set(incluidas.map(s => s.proveedorCodigo || s.proveedorNombre).filter(Boolean)).size,
+    [incluidas]
+  )
+
+  const confianzas = useMemo(() => ({
+    alto:  recomendaciones.filter(r => r.nivel_confianza === 'ALTO').length,
+    medio: recomendaciones.filter(r => r.nivel_confianza === 'MEDIO').length,
+    bajo:  recomendaciones.filter(r => r.nivel_confianza === 'BAJO').length,
+  }), [recomendaciones])
 
   return (
     <div className="min-h-screen bg-[#08080f]">
@@ -208,43 +216,9 @@ export default function HomePage() {
         style={{ background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.08) 0%, transparent 70%)' }}
       />
 
-      <Header marcas={dbStats.marcas} proveedores={dbStats.proveedores} saps={dbStats.saps} />
+      <Header marcas={dbStats.marcas} proveedores={dbStats.proveedores} saps={dbStats.saps} vista={vista} onVista={setVista} />
 
       <main className="relative max-w-4xl lg:max-w-[1160px] mx-auto px-5 pt-20 pb-20">
-
-        {/* Conmutador de vista: Asistente IA | Secciones de fábrica */}
-        <div className="mt-6 mb-2 flex items-center gap-1 p-1 rounded-xl border border-white/08 w-fit" style={{ background: 'rgba(255,255,255,0.02)' }}>
-          <button
-            onClick={() => setVista('asistente')}
-            className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-lg transition-all"
-            style={{
-              background: vista === 'asistente' ? 'rgba(99,102,241,0.15)' : 'transparent',
-              color: vista === 'asistente' ? 'rgba(165,180,252,0.95)' : 'rgba(255,255,255,0.35)',
-            }}
-          >
-            <Sparkles className="w-3.5 h-3.5" /> Asistente
-          </button>
-          <button
-            onClick={() => setVista('secciones')}
-            className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-lg transition-all"
-            style={{
-              background: vista === 'secciones' ? 'rgba(52,211,153,0.13)' : 'transparent',
-              color: vista === 'secciones' ? 'rgba(110,231,183,0.95)' : 'rgba(255,255,255,0.35)',
-            }}
-          >
-            <Factory className="w-3.5 h-3.5" /> Secciones
-          </button>
-          <button
-            onClick={() => setVista('dashboard')}
-            className="flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-lg transition-all"
-            style={{
-              background: vista === 'dashboard' ? 'rgba(251,191,36,0.12)' : 'transparent',
-              color: vista === 'dashboard' ? 'rgba(252,211,77,0.95)' : 'rgba(255,255,255,0.35)',
-            }}
-          >
-            <BarChart3 className="w-3.5 h-3.5" /> Dashboard
-          </button>
-        </div>
 
         {vista === 'secciones' && <SeccionesView />}
         {vista === 'dashboard' && <DashboardView />}
@@ -271,24 +245,7 @@ export default function HomePage() {
         <InputZone onAnalizar={handleAnalizar} cargando={cargando} historicoCargado={dbStats.saps > 0} />
 
         {(cargando || log.length > 0) && (
-          <div className="mt-6 glass rounded-xl p-4 space-y-2">
-            {log.map((entry, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <CheckCheck className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-emerald-400/70" />
-                <span className="text-xs text-white/50 leading-relaxed">{entry.texto}</span>
-              </div>
-            ))}
-            {cargando && pasoActual && (() => {
-              const info = PASOS_INFO[pasoActual]
-              const Icon = info.icon
-              return (
-                <div className="flex items-center gap-2.5">
-                  <Icon className="w-3.5 h-3.5 text-indigo-400 animate-pulse flex-shrink-0" />
-                  <span className="text-xs text-indigo-400/80">{info.label}…</span>
-                </div>
-              )
-            })()}
-          </div>
+          <ProgresoAnalisis pasoActual={pasoActual} log={log} cargando={cargando} />
         )}
 
         {error && (
@@ -339,31 +296,68 @@ export default function HomePage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold text-white/80">
-                  {recomendaciones.length} material{recomendaciones.length > 1 ? 'es' : ''} analizados
-                </h2>
-                <p className="text-xs text-white/30 mt-0.5">
-                  Elige proveedor y código SAP en cada tarjeta · {incluidas.length} incluida{incluidas.length !== 1 ? 's' : ''} en el pedido
-                </p>
+            {/* Resumen del análisis */}
+            <div className="mb-4 rounded-2xl border border-white/07 px-4 py-3" style={{ background: 'rgba(255,255,255,0.02)' }}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm font-semibold text-white/85">
+                    {recomendaciones.length} material{recomendaciones.length > 1 ? 'es' : ''}
+                  </h2>
+                  {confianzas.alto > 0 && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                      {confianzas.alto} ALTO
+                    </span>
+                  )}
+                  {confianzas.medio > 0 && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                      {confianzas.medio} MEDIO
+                    </span>
+                  )}
+                  {confianzas.bajo > 0 && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-500/10 text-red-400 border-red-500/20">
+                      {confianzas.bajo} BAJO
+                    </span>
+                  )}
+                  {numProveedores > 0 && (
+                    <span className="flex items-center gap-1 text-xs text-white/40">
+                      <Building2 className="w-3 h-3 text-white/25" />
+                      {numProveedores} proveedor{numProveedores !== 1 ? 'es' : ''}
+                    </span>
+                  )}
+                  {costeEstimado.conPrecio > 0 && (
+                    <span
+                      className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
+                      style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)', color: 'rgba(52,211,153,0.9)' }}
+                      title={`Estimación según el último precio pagado en tu histórico (${costeEstimado.conPrecio} de ${incluidas.length} líneas con precio conocido)`}
+                    >
+                      <Coins className="w-3 h-3" />
+                      ≈ {fmtEUR(costeEstimado.total)}
+                      {costeEstimado.conPrecio < incluidas.length && (
+                        <span className="text-white/30 font-normal">({costeEstimado.conPrecio}/{incluidas.length} con precio)</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setRecomendaciones(prev => prev.map(r => ({ ...r, seleccionado: true }))); setSelecciones(prev => prev.map(s => ({ ...s, incluido: true }))) }}
+                    className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
+                  >Todos</button>
+                  <button
+                    onClick={() => { setRecomendaciones(prev => prev.map(r => ({ ...r, seleccionado: false }))); setSelecciones(prev => prev.map(s => ({ ...s, incluido: false }))) }}
+                    className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
+                  >Ninguno</button>
+                  <button
+                    onClick={handleReset}
+                    className="flex items-center gap-1.5 text-xs text-white/25 hover:text-white/50 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3" /> Nueva consulta
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => { setRecomendaciones(prev => prev.map(r => ({ ...r, seleccionado: true }))); setSelecciones(prev => prev.map(s => ({ ...s, incluido: true }))) }}
-                  className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
-                >Todos</button>
-                <button
-                  onClick={() => { setRecomendaciones(prev => prev.map(r => ({ ...r, seleccionado: false }))); setSelecciones(prev => prev.map(s => ({ ...s, incluido: false }))) }}
-                  className="text-xs text-white/35 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
-                >Ninguno</button>
-                <button
-                  onClick={handleReset}
-                  className="flex items-center gap-1.5 text-xs text-white/25 hover:text-white/50 px-2 py-1 rounded-lg hover:bg-white/04 transition-colors"
-                >
-                  <RotateCcw className="w-3 h-3" /> Nueva consulta
-                </button>
-              </div>
+              <p className="text-xs text-white/30 mt-1.5">
+                Elige proveedor y código SAP en cada tarjeta · {incluidas.length} incluida{incluidas.length !== 1 ? 's' : ''} en el pedido
+              </p>
             </div>
 
             <div className="lg:flex lg:gap-5 lg:items-start">
@@ -415,7 +409,7 @@ export default function HomePage() {
                       proveedoresDB={proveedoresDB}
                       onSeleccionesChange={setSelecciones}
                     />
-                    <GuardarEnSeccion selecciones={selecciones} />
+                    <GuardarEnSeccion selecciones={selecciones} solicitudCompra={solicitudCompra} />
                   </div>
                 )}
               </div>
