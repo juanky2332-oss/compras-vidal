@@ -408,6 +408,7 @@ export default function HomePage() {
                       solicitudCompra={solicitudCompra}
                       proveedoresDB={proveedoresDB}
                       onSeleccionesChange={setSelecciones}
+                      materiales={recomendaciones.map((r, i) => ({ indice: i, descripcion: r.descripcion }))}
                     />
                     <GuardarEnSeccion selecciones={selecciones} solicitudCompra={solicitudCompra} />
                   </div>

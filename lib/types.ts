@@ -61,6 +61,26 @@ export interface SeleccionPedido {
   proveedorNombre: string     // proveedor elegido
   proveedorCodigo: string     // código del proveedor elegido
   cantidad: number
+
+  // Precio importado de una oferta de proveedor (ver ImportarOfertaPrecios), en
+  // formato SAP listo para pegar en ME21N/ME51N (columnas Prc.neto / Mon. / por).
+  precioUnitario?: number     // precio real por unidad, redondeado a 4 decimales
+  precioSAP?: string          // valor a escribir en "Prc.neto" (con coma o entero según multiplicador)
+  multiplicador?: number      // valor numérico del campo "por" (1, 1000, 10000...)
+  moneda?: string             // 'EUR' por defecto
+}
+
+// Línea calculada por /api/oferta-precios a partir del texto libre de una oferta.
+export interface LineaOfertaPrecio {
+  descripcion: string
+  cantidad: number
+  descuentoPct: number        // 0 si la oferta no menciona descuento
+  importeTotal: number        // importe NETO de la línea (con el descuento ya aplicado)
+  precioUnitario: number
+  precioUnitarioLabel: string
+  precioSAP: string
+  multiplicador: number
+  multiplicadorLabel: string
 }
 
 export interface ProveedorSimple {

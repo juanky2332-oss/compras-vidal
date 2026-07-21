@@ -1,14 +1,18 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Clipboard, Check, Building2, AlertCircle, FileText, ChevronDown, Search, X, Users } from 'lucide-react'
+import { Clipboard, Check, Building2, AlertCircle, FileText, ChevronDown, Search, X, Users, Coins } from 'lucide-react'
 import type { SeleccionPedido, ProveedorSimple } from '@/lib/types'
+import { fmtEUR } from '@/lib/secciones'
+import { agruparMiles } from '@/lib/sapPrecio'
+import ImportarOfertaPrecios from './ImportarOfertaPrecios'
 
 interface ExportSAPProps {
   selecciones: SeleccionPedido[]
   solicitudCompra?: string
   proveedoresDB?: ProveedorSimple[]
   onSeleccionesChange?: (selecciones: SeleccionPedido[]) => void
+  materiales?: Array<{ indice: number; descripcion: string }>
 }
 
 function cleanSap(sap: string | undefined | null): string {
@@ -30,9 +34,9 @@ function buildLine(sel: SeleccionPedido, solicitudCompra?: string): string {
     '',              // 4  U...
     '',              // 5  T
     '',              // 6  Fe.entrega
-    '',              // 7  Prc.neto
-    '',              // 8  Mon...
-    '',              // 9  por
+    sel.precioSAP || '',                             // 7  Prc.neto
+    sel.precioSAP ? (sel.moneda || 'EUR') : '',       // 8  Mon...
+    sel.precioSAP ? String(sel.multiplicador || 1) : '', // 9  por
     '',              // 10 CPP
     '',              // 11 Grupo art.
     '1001',          // 12 Centro
@@ -216,6 +220,8 @@ function ProveedorBlock({
   }
 
   const sinProveedor = proveedor === 'Sin proveedor' || proveedor === 'Sin datos'
+  const conPrecio = lineas.filter((l) => l.precioSAP && l.precioUnitario != null)
+  const subtotal = conPrecio.reduce((acc, l) => acc + (l.precioUnitario || 0) * l.cantidad, 0)
 
   return (
     <div className="rounded-xl border border-white/[0.08] overflow-visible">
@@ -228,6 +234,16 @@ function ProveedorBlock({
           <span className="text-sm font-semibold text-white/85 truncate">{proveedor}</span>
           {codigo && <span className="text-xs text-white/30 font-mono shrink-0">{codigo}</span>}
           <span className="text-xs text-white/30 shrink-0">{lineas.length} línea{lineas.length > 1 ? 's' : ''}</span>
+          {conPrecio.length > 0 && (
+            <span
+              className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0"
+              style={{ background: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.25)', color: 'rgba(110,231,183,0.9)' }}
+              title={`${conPrecio.length} de ${lineas.length} líneas con precio importado`}
+            >
+              <Coins className="w-2.5 h-2.5" />
+              {fmtEUR(subtotal)}
+            </span>
+          )}
           {solicitudCompra && (
             <span
               className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full shrink-0"
@@ -266,6 +282,7 @@ function ProveedorBlock({
         {lineas.map((sel, i) => {
           const sap = cleanSap(sel.sapElegido)
           const sinSap = !sap
+          const tienePrecio = !!sel.precioSAP && sel.precioUnitario != null
           return (
             <div key={i} className="px-4 py-2">
               <div className="flex items-center gap-3">
@@ -280,6 +297,16 @@ function ProveedorBlock({
                 </div>
                 <div className="text-xs font-mono text-white/50 w-8 text-right shrink-0">{sel.cantidad}</div>
               </div>
+              {tienePrecio && (
+                <div className="mt-1 pl-[108px] flex items-center gap-2 text-[10px] font-mono">
+                  <span className="text-emerald-400/70">{sel.precioSAP}</span>
+                  <span className="text-white/25">{sel.multiplicador && sel.multiplicador > 1 ? `×${agruparMiles(sel.multiplicador)}` : '×1'}</span>
+                  <span className="text-white/20">·</span>
+                  <span className="text-white/40">{(sel.precioUnitario as number).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/ud</span>
+                  <span className="text-white/20">·</span>
+                  <span className="text-white/50">{fmtEUR((sel.precioUnitario as number) * sel.cantidad)} total</span>
+                </div>
+              )}
             </div>
           )
         })}
@@ -300,6 +327,7 @@ export default function ExportSAP({
   solicitudCompra,
   proveedoresDB = [],
   onSeleccionesChange,
+  materiales = [],
 }: ExportSAPProps) {
   const incluidas = selecciones.filter((s) => s.incluido)
   if (incluidas.length === 0) {
@@ -312,6 +340,8 @@ export default function ExportSAP({
 
   const grupos = groupBySupplier(incluidas)
   const aproximados = incluidas.filter((s) => s.sapAproximado).length
+  const lineasConPrecio = incluidas.filter((s) => s.precioSAP && s.precioUnitario != null)
+  const totalPedido = lineasConPrecio.reduce((acc, s) => acc + (s.precioUnitario as number) * s.cantidad, 0)
 
   const handleReasignarGrupo = (indicesDelGrupo: number[], nuevoCodigo: string, nuevoNombre: string) => {
     if (!onSeleccionesChange) return
@@ -320,6 +350,13 @@ export default function ExportSAP({
         ? { ...s, proveedorCodigo: nuevoCodigo, proveedorNombre: nuevoNombre }
         : s
     )
+    onSeleccionesChange(nuevas)
+  }
+
+  const handleAplicarPrecios = (cambios: Array<{ indice: number; cambios: Partial<SeleccionPedido> }>) => {
+    if (!onSeleccionesChange) return
+    const porIndice = new Map(cambios.map((c) => [c.indice, c.cambios]))
+    const nuevas = selecciones.map((s) => (porIndice.has(s.indice) ? { ...s, ...porIndice.get(s.indice) } : s))
     onSeleccionesChange(nuevas)
   }
 
@@ -333,17 +370,42 @@ export default function ExportSAP({
               {grupos.length} pedido{grupos.length > 1 ? 's' : ''} · {incluidas.length} línea{incluidas.length > 1 ? 's' : ''} · Clic en celda Material fila 1 → Ctrl+V
             </p>
           </div>
-          {solicitudCompra && (
-            <span
-              className="flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg shrink-0"
-              style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.22)', color: 'rgba(165,180,252,0.9)' }}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              SC {solicitudCompra}
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {lineasConPrecio.length > 0 && (
+              <span
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                style={{ background: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.25)', color: 'rgba(110,231,183,0.9)' }}
+                title={`${lineasConPrecio.length} de ${incluidas.length} líneas con precio importado`}
+              >
+                <Coins className="w-3.5 h-3.5" />
+                Total pedido: {fmtEUR(totalPedido)}
+                {lineasConPrecio.length < incluidas.length && (
+                  <span className="font-normal opacity-60">({lineasConPrecio.length}/{incluidas.length})</span>
+                )}
+              </span>
+            )}
+            {solicitudCompra && (
+              <span
+                className="flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg"
+                style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.22)', color: 'rgba(165,180,252,0.9)' }}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                SC {solicitudCompra}
+              </span>
+            )}
+          </div>
         </div>
       </div>
+
+      {onSeleccionesChange && (
+        <div className="px-4 pt-3">
+          <ImportarOfertaPrecios
+            selecciones={selecciones}
+            materiales={materiales}
+            onAplicar={handleAplicarPrecios}
+          />
+        </div>
+      )}
 
       <div className="p-4 space-y-3" style={{ overflow: 'visible' }}>
         {grupos.map((g, i) => {
@@ -385,9 +447,9 @@ export default function ExportSAP({
               { label: 'UM', w: 28 },
               { label: 'T', w: 20 },
               { label: 'F.ent.', w: 44 },
-              { label: 'Prc.', w: 36 },
-              { label: 'Mon.', w: 36 },
-              { label: 'por', w: 28 },
+              { label: 'Prc.', w: 36, highlight: lineasConPrecio.length > 0 },
+              { label: 'Mon.', w: 36, highlight: lineasConPrecio.length > 0 },
+              { label: 'por', w: 28, highlight: lineasConPrecio.length > 0 },
               { label: 'CPP', w: 32 },
               { label: 'Grp.', w: 32 },
               { label: 'Centro', w: 44 },
@@ -419,6 +481,7 @@ export default function ExportSAP({
           </div>
           <p className="text-[10px] text-white/15 mt-1">
             * Txt.brv. solo si no hay código SAP · ** Sol.ped. = columna 25 (correcta en ME21N)
+            {lineasConPrecio.length > 0 && ' · Prc./Mon./por rellenados desde la oferta importada'}
           </p>
         </div>
       </div>
