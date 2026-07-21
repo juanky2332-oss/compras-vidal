@@ -13,9 +13,12 @@ import {
   Trash2,
   FileText,
   Coins,
+  WandSparkles,
+  Warehouse,
 } from 'lucide-react'
 import type { LineaOfertaSAP, ProveedorSimple } from '@/lib/types'
 import { fmtEUR } from '@/lib/secciones'
+import { abreviarDescripcionSAP } from '@/lib/abreviaturas'
 
 interface FilaEditable extends LineaOfertaSAP {
   id: string
@@ -54,7 +57,7 @@ async function copyToClipboard(text: string): Promise<void> {
 // mayúsculas), aunque haya código SAP: es lo que permite reutilizar un código
 // parecido para un artículo poco habitual, cambiando la descripción para que
 // se entienda qué se ha pedido realmente, sin tener que crear un material nuevo.
-function buildLine(fila: FilaEditable, solicitudCompra: string): string {
+function buildLine(fila: FilaEditable, solicitudCompra: string, centro: string, almacen: string): string {
   const qty = String(fila.cantidad)
   return [
     fila.sapCodigo || '',                 // 1  Material
@@ -68,8 +71,8 @@ function buildLine(fila: FilaEditable, solicitudCompra: string): string {
     fila.tienePrecio ? String(fila.multiplicador || 1) : '', // 9  por
     '',                                   // 10 CPP
     '',                                   // 11 Grupo art.
-    '1001',                               // 12 Centro
-    '100',                                // 13 Almacén
+    centro || '1001',                     // 12 Centro
+    almacen || '100',                     // 13 Almacén
     '',                                   // 14 Lote
     '',                                   // 15 Segmento de stock
     '',                                   // 16 Segm.necesidad
@@ -162,6 +165,8 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
   const [proveedorCodigo, setProveedorCodigo] = useState('')
   const [texto, setTexto] = useState('')
   const [solicitudCompra, setSolicitudCompra] = useState('')
+  const [centro, setCentro] = useState('1001')
+  const [almacen, setAlmacen] = useState('100')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filas, setFilas] = useState<FilaEditable[]>([])
@@ -217,6 +222,12 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
 
   const eliminarFila = (id: string) => setFilas((prev) => prev.filter((f) => f.id !== id))
 
+  // Sustituye el texto breve de TODAS las líneas por el del PEDIDO (no el de
+  // la BD), abreviado con la misma lógica que usan las descripciones ya
+  // guardadas en SAP. El código SAP encontrado no se toca.
+  const handleConvertirTexto = () =>
+    setFilas((prev) => prev.map((f) => ({ ...f, textoSAP: abreviarDescripcionSAP(f.descripcion, 40) })))
+
   const totalPedido = useMemo(() => filas.reduce((acc, f) => acc + (f.tienePrecio ? f.importeTotal : 0), 0), [filas])
   const conPrecio = filas.filter((f) => f.tienePrecio).length
   const exactos = filas.filter((f) => f.sapCodigo && f.exacto).length
@@ -224,7 +235,7 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
   const sinCodigo = filas.filter((f) => !f.sapCodigo).length
 
   const handleCopiarPedido = async () => {
-    const tsv = filas.map((f) => buildLine(f, solicitudCompra)).join('\n')
+    const tsv = filas.map((f) => buildLine(f, solicitudCompra, centro, almacen)).join('\n')
     await copyToClipboard(tsv)
     setCopiado(true)
     setTimeout(() => setCopiado(false), 2500)
@@ -284,6 +295,32 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-white/[0.04]">
+          <span className="text-[10px] text-white/25 uppercase tracking-widest font-semibold">Opcional:</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.08]">
+            <Warehouse className="w-3.5 h-3.5 text-white/25 shrink-0" />
+            <span className="text-[10px] text-white/30">Centro</span>
+            <input
+              type="text"
+              value={centro}
+              onChange={(e) => setCentro(e.target.value)}
+              className="w-14 text-xs text-white/70 bg-transparent outline-none font-mono"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.08]">
+            <span className="text-[10px] text-white/30">Almacén</span>
+            <input
+              type="text"
+              value={almacen}
+              onChange={(e) => setAlmacen(e.target.value)}
+              className="w-14 text-xs text-white/70 bg-transparent outline-none font-mono"
+            />
+          </div>
+          <span className="text-[10px] text-white/20">
+            Solo si te hace falta cambiarlos (ej. otra empresa del grupo) — por defecto Centro 1001 / Almacén 100.
+          </span>
+        </div>
+
         {error && (
           <div className="flex items-start gap-2 p-2.5 rounded-lg bg-red-500/[0.06] border border-red-500/20">
             <AlertCircle className="w-3.5 h-3.5 text-red-400/70 shrink-0 mt-px" />
@@ -316,6 +353,15 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
                   Total: {fmtEUR(totalPedido)}
                 </span>
               )}
+              <button
+                onClick={handleConvertirTexto}
+                title="Sustituye el texto breve de todas las líneas por el del pedido, abreviado estilo SAP (el código SAP no cambia)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)', color: '#fbbf24' }}
+              >
+                <WandSparkles className="w-3.5 h-3.5" />
+                Convertir texto SAP
+              </button>
               <button
                 onClick={handleCopiarPedido}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200"
