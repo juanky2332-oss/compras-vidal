@@ -61,26 +61,6 @@ export interface SeleccionPedido {
   proveedorNombre: string     // proveedor elegido
   proveedorCodigo: string     // código del proveedor elegido
   cantidad: number
-
-  // Precio importado de una oferta de proveedor (ver ImportarOfertaPrecios), en
-  // formato SAP listo para pegar en ME21N/ME51N (columnas Prc.neto / Mon. / por).
-  precioUnitario?: number     // precio real por unidad, redondeado a 4 decimales
-  precioSAP?: string          // valor a escribir en "Prc.neto" (con coma o entero según multiplicador)
-  multiplicador?: number      // valor numérico del campo "por" (1, 1000, 10000...)
-  moneda?: string             // 'EUR' por defecto
-}
-
-// Línea calculada por /api/oferta-precios a partir del texto libre de una oferta.
-export interface LineaOfertaPrecio {
-  descripcion: string
-  cantidad: number
-  descuentoPct: number        // 0 si la oferta no menciona descuento
-  importeTotal: number        // importe NETO de la línea (con el descuento ya aplicado)
-  precioUnitario: number
-  precioUnitarioLabel: string
-  precioSAP: string
-  multiplicador: number
-  multiplicadorLabel: string
 }
 
 export interface ProveedorSimple {
@@ -101,4 +81,23 @@ export interface SapSearchResult {
   proveedor: string
   veces: number
   fuente?: 'historico' | 'catalogo'  // catálogo = existe en SAP pero sin historial de compra
+}
+
+// ── Pestaña "Ofertas / Pedidos SAP" (independiente del Asistente) ──
+// Una línea de una oferta de proveedor o pedido pegado en texto libre,
+// ya buscada en la BD SAP y (si traía precio) convertida a formato SAP.
+export interface LineaOfertaSAP {
+  descripcion: string        // texto tal cual lo pidió el usuario / la oferta
+  cantidad: number
+  sapCodigo: string          // código SAP encontrado (vacío si no hay candidato)
+  sapDescripcion: string     // descripción del SAP tal cual está en la BD (referencia)
+  exacto: boolean            // true = coincidencia exacta; false = aproximada (misma familia, distinta medida)
+  tienePrecio: boolean
+  descuentoPct: number
+  importeTotal: number
+  precioUnitario: number
+  precioUnitarioLabel: string
+  precioSAP: string
+  multiplicador: number
+  multiplicadorLabel: string
 }

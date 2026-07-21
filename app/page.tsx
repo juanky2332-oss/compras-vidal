@@ -5,6 +5,7 @@ import Header, { type Vista } from '@/components/Header'
 import InputZone from '@/components/InputZone'
 import MaterialCard from '@/components/MaterialCard'
 import ExportSAP from '@/components/ExportSAP'
+import OfertasSAP from '@/components/OfertasSAP'
 import SeccionesView from '@/components/SeccionesView'
 import DashboardView from '@/components/DashboardView'
 import GuardarEnSeccion from '@/components/GuardarEnSeccion'
@@ -220,6 +221,7 @@ export default function HomePage() {
 
       <main className="relative max-w-4xl lg:max-w-[1160px] mx-auto px-5 pt-20 pb-20">
 
+        {vista === 'ofertas' && <OfertasSAP proveedoresDB={proveedoresDB} />}
         {vista === 'secciones' && <SeccionesView />}
         {vista === 'dashboard' && <DashboardView />}
 
@@ -408,7 +410,6 @@ export default function HomePage() {
                       solicitudCompra={solicitudCompra}
                       proveedoresDB={proveedoresDB}
                       onSeleccionesChange={setSelecciones}
-                      materiales={recomendaciones.map((r, i) => ({ indice: i, descripcion: r.descripcion }))}
                     />
                     <GuardarEnSeccion selecciones={selecciones} solicitudCompra={solicitudCompra} />
                   </div>

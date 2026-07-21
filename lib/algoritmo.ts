@@ -304,7 +304,7 @@ const MARCAS_OVERRIDE: Array<{
   },
 ]
 
-function norm(s: string): string {
+export function norm(s: string): string {
   return (s ?? '')
     .toLowerCase()
     .normalize('NFD')
@@ -884,7 +884,7 @@ function buscarSapsEnCatalogo(
 
 // Wrapper que llama a buscarSapsRelevantes (histórico) y, si obtiene < 2 exactos,
 // complementa con resultados del catálogo SAP completo.
-function buscarSAPsConFallback(
+export function buscarSAPsConFallback(
   descNorm: string,
   db: DbData,
   proveedorCodigo?: string,

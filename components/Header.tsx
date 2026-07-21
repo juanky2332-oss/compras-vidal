@@ -1,8 +1,8 @@
 'use client'
 
-import { ShoppingCart, Database, Sparkles, Factory, BarChart3 } from 'lucide-react'
+import { ShoppingCart, Database, Sparkles, Factory, BarChart3, Receipt } from 'lucide-react'
 
-export type Vista = 'asistente' | 'secciones' | 'dashboard'
+export type Vista = 'asistente' | 'ofertas' | 'secciones' | 'dashboard'
 
 interface HeaderProps {
   marcas: number
@@ -14,6 +14,7 @@ interface HeaderProps {
 
 const TABS: Array<{ id: Vista; label: string; icon: typeof Sparkles; color: string }> = [
   { id: 'asistente', label: 'Asistente', icon: Sparkles, color: '#a5b4fc' },
+  { id: 'ofertas', label: 'Ofertas SAP', icon: Receipt, color: '#5eead4' },
   { id: 'secciones', label: 'Secciones', icon: Factory, color: '#6ee7b7' },
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3, color: '#fcd34d' },
 ]
