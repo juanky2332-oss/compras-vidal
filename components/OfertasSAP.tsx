@@ -15,6 +15,7 @@ import {
   Coins,
   WandSparkles,
   Warehouse,
+  Undo2,
 } from 'lucide-react'
 import type { LineaOfertaSAP, ProveedorSimple } from '@/lib/types'
 import { fmtEUR } from '@/lib/secciones'
@@ -23,6 +24,8 @@ import { abreviarDescripcionSAP } from '@/lib/abreviaturas'
 interface FilaEditable extends LineaOfertaSAP {
   id: string
   textoSAP: string
+  textoOriginal: string       // texto inicial (BD o pedido), para poder revertir la conversión
+  seleccionadaConvertir: boolean // si entra en la conversión/reversión masiva ("posición por posición")
 }
 
 interface OfertasSAPProps {
@@ -204,11 +207,10 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
         setProveedorNombre(data.proveedor)
       }
       setFilas(
-        lineas.map((l) => ({
-          ...l,
-          id: nuevoId(),
-          textoSAP: (l.sapDescripcion || l.descripcion).toUpperCase().slice(0, 40),
-        }))
+        lineas.map((l) => {
+          const inicial = (l.sapDescripcion || l.descripcion).toUpperCase().slice(0, 40)
+          return { ...l, id: nuevoId(), textoSAP: inicial, textoOriginal: inicial, seleccionadaConvertir: true }
+        })
       )
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
@@ -222,11 +224,29 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
 
   const eliminarFila = (id: string) => setFilas((prev) => prev.filter((f) => f.id !== id))
 
-  // Sustituye el texto breve de TODAS las líneas por el del PEDIDO (no el de
-  // la BD), abreviado con la misma lógica que usan las descripciones ya
-  // guardadas en SAP. El código SAP encontrado no se toca.
+  // Sustituye el texto breve por el del PEDIDO (no el de la BD), abreviado con
+  // la misma lógica que usan las descripciones ya guardadas en SAP, sin tocar
+  // el código SAP encontrado. Solo afecta a las líneas marcadas (checkbox) —
+  // así se puede elegir posición por posición qué líneas convertir.
   const handleConvertirTexto = () =>
-    setFilas((prev) => prev.map((f) => ({ ...f, textoSAP: abreviarDescripcionSAP(f.descripcion, 40) })))
+    setFilas((prev) =>
+      prev.map((f) => (f.seleccionadaConvertir ? { ...f, textoSAP: abreviarDescripcionSAP(f.descripcion, 40) } : f))
+    )
+
+  const convertirFila = (id: string) =>
+    setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, textoSAP: abreviarDescripcionSAP(f.descripcion, 40) } : f)))
+
+  // Deshace la conversión: cada línea vuelve al texto que tenía justo tras
+  // procesar la oferta (antes de convertir o de cualquier edición manual).
+  const handleRevertirTexto = () => setFilas((prev) => prev.map((f) => ({ ...f, textoSAP: f.textoOriginal })))
+
+  const revertirFila = (id: string) => setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, textoSAP: f.textoOriginal } : f)))
+
+  const todasSeleccionadas = filas.length > 0 && filas.every((f) => f.seleccionadaConvertir)
+  const handleToggleTodas = () =>
+    setFilas((prev) => prev.map((f) => ({ ...f, seleccionadaConvertir: !todasSeleccionadas })))
+
+  const seleccionadasCount = filas.filter((f) => f.seleccionadaConvertir).length
 
   const totalPedido = useMemo(() => filas.reduce((acc, f) => acc + (f.tienePrecio ? f.importeTotal : 0), 0), [filas])
   const conPrecio = filas.filter((f) => f.tienePrecio).length
@@ -355,12 +375,22 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
               )}
               <button
                 onClick={handleConvertirTexto}
-                title="Sustituye el texto breve de todas las líneas por el del pedido, abreviado estilo SAP (el código SAP no cambia)"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                disabled={seleccionadasCount === 0}
+                title="Sustituye el texto breve de las líneas marcadas por el del pedido, abreviado estilo SAP (el código SAP no cambia)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-30"
                 style={{ background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)', color: '#fbbf24' }}
               >
                 <WandSparkles className="w-3.5 h-3.5" />
-                Convertir texto SAP
+                Convertir texto SAP ({seleccionadasCount})
+              </button>
+              <button
+                onClick={handleRevertirTexto}
+                title="Deshace la conversión: todas las líneas vuelven al texto que tenían antes de convertir"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.55)' }}
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                Revertir
               </button>
               <button
                 onClick={handleCopiarPedido}
@@ -381,6 +411,15 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-white/[0.03] text-white/35">
+                  <th className="px-2 py-2">
+                    <input
+                      type="checkbox"
+                      checked={todasSeleccionadas}
+                      onChange={handleToggleTodas}
+                      title="Marcar/desmarcar todas para la conversión masiva"
+                      className="accent-emerald-500"
+                    />
+                  </th>
                   <th className="text-left font-medium px-3 py-2 whitespace-nowrap">Código SAP</th>
                   <th className="text-left font-medium px-3 py-2 min-w-[220px]">Texto (Txt.brv.) — editable</th>
                   <th className="text-right font-medium px-2.5 py-2">Cant.</th>
@@ -394,6 +433,15 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
               <tbody className="divide-y divide-white/[0.04]">
                 {filas.map((f) => (
                   <tr key={f.id}>
+                    <td className="px-2 py-2 align-top pt-3">
+                      <input
+                        type="checkbox"
+                        checked={f.seleccionadaConvertir}
+                        onChange={() => actualizarFila(f.id, { seleccionadaConvertir: !f.seleccionadaConvertir })}
+                        title="Incluir esta línea en la conversión/reversión masiva"
+                        className="accent-emerald-500"
+                      />
+                    </td>
                     <td className="px-3 py-2 align-top">
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono" style={{ color: f.sapCodigo ? '#818cf8' : 'rgba(255,255,255,0.2)' }}>
@@ -419,12 +467,28 @@ export default function OfertasSAP({ proveedoresDB }: OfertasSAPProps) {
                       )}
                     </td>
                     <td className="px-3 py-2 align-top">
-                      <input
-                        value={f.textoSAP}
-                        onChange={(e) => actualizarFila(f.id, { textoSAP: e.target.value.toUpperCase().slice(0, 40) })}
-                        maxLength={40}
-                        className="w-full text-xs text-white/80 bg-white/[0.03] border border-white/[0.08] rounded px-2 py-1 outline-none focus:border-indigo-500/30 font-mono uppercase"
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          value={f.textoSAP}
+                          onChange={(e) => actualizarFila(f.id, { textoSAP: e.target.value.toUpperCase().slice(0, 40) })}
+                          maxLength={40}
+                          className="flex-1 text-xs text-white/80 bg-white/[0.03] border border-white/[0.08] rounded px-2 py-1 outline-none focus:border-indigo-500/30 font-mono uppercase"
+                        />
+                        <button
+                          onClick={() => convertirFila(f.id)}
+                          title="Convertir solo esta línea al texto del pedido, abreviado"
+                          className="shrink-0 text-amber-400/50 hover:text-amber-400/90 transition-colors p-1"
+                        >
+                          <WandSparkles className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => revertirFila(f.id)}
+                          title="Revertir solo esta línea al texto original"
+                          className="shrink-0 text-white/25 hover:text-white/60 transition-colors p-1"
+                        >
+                          <Undo2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <p className="text-[10px] text-white/20 mt-0.5 truncate" title={f.descripcion}>
                         Pedido: {f.descripcion} {f.sapCodigo && <>· BD: {f.sapDescripcion}</>}
                       </p>
